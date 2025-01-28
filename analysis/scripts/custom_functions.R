@@ -466,7 +466,7 @@ binomial_prep_psc_effect <- function(asv_table,taxa_table,metadata,df_effect, pa
 }
 
 univariate_statistics <- function(list_intersections,psc_effect,
-                                  genus_asv_taxa_tab,segment="Ileum"){
+                                  genus_asv_taxa_tab,segment="terminal_ileum"){
   univar_df <- data.frame()
   wb = createWorkbook()
   
@@ -638,7 +638,7 @@ group_intersection <- function(group, list_intersections, list_venns,
   orig <- raw_linda_results[[segment]][[paste0(group[1]," vs Group",group[2])]]
   diff <- orig[orig$SeqID %in% diff,]
   
-  if (segment == "terminal_ileum") segment <- "Ileum"
+  #if (segment == "terminal_ileum") segment <- "Ileum"
   list_intersections[[paste(segment,level,paste(group, collapse = " vs "))]] <- diff
   
   # venn diagram
@@ -664,7 +664,7 @@ country_union <- function(group,linda.output1, fit_data, segment, level){
   union <- c(list_core[[1]],list_core[[2]])
   union <- union[!duplicated(union)]
   
-  if (segment == "terminal_ileum") segment <- "Ileum"
+  #if (segment == "terminal_ileum") segment <- "Ileum"
   # save the results
   list_country_union[[paste(segment,level,paste(group, collapse = " vs "))]] <- union
   return(list_country_union)
@@ -692,7 +692,7 @@ country_interaction <- function(group,linda.output1,list_intersections,
     uni_data_no <- uni_data[,rownames(uni_metadata_no)]
     
     # Run linDA for each subset
-    if (segment=="Ileum"){
+    if (segment=="terminal_ileum"){
       linda_czech <- linda(uni_data_czech , uni_metadata_czech, formula = '~ Group')
       linda_no <- linda(uni_data_no, uni_metadata_no, formula = '~ Group')
     } else if (segment=="colon"){
@@ -728,6 +728,8 @@ removing_interaction_problems <- function(group,
       df_to_change <- df_to_change[!(rownames(df_to_change)%in%to_remove),]
       list_intersections[[paste(segment,level, group[1],"vs",group[2])]] <- df_to_change
     }
+    
+    list_intersections <- lapply(list_intersections, function (x) remove_rownames(x))
   }
   
   return(list_intersections)
@@ -1982,26 +1984,37 @@ heatmap_linda <- function(linda.output,taxa_tab){
   return(p)
 }
 
-dot_heatmap_linda <- function(raw_linda, taxa_table, group=NULL){
+dot_heatmap_linda <- function(raw_linda, uni_df,
+                              taxa_table, group=NULL){
   if (class(raw_linda)=="data.frame") {
-    raw_linda <- raw_linda[, c("ASV","Taxonomy","padj", "log2FoldChange","MEDIAN ALL","Taxonomy")]
+    raw_linda <- raw_linda[, c("SeqID","Taxonomy","padj", "log2FoldChange","MEDIAN_clr_ALL")]
     raw_linda <- raw_linda[,c(TRUE,!grepl("ASV",colnames(raw_linda)[-1]))]
     raw_linda <- raw_linda[,c(TRUE,!grepl("Taxonomy",colnames(raw_linda)[-2]))]
-    colnames(raw_linda) <- c("SeqID","Taxonomy",paste0(group,c(":padj",":log2FoldChange",":MEDIAN ALL")))
+    colnames(raw_linda) <- c("SeqID","Taxonomy",paste0(group,c(":padj",":log2FoldChange",":MEDIAN_clr_ALL")))
   }
   else {
     if (is.null(group)){
       if (TRUE %in% grepl("Group",names(raw_linda))) wanted_list <- raw_linda[grepl("vs Group",names(raw_linda)) & !grepl(":",names(raw_linda))]
       else wanted_list <- raw_linda
     } else wanted_list <- raw_linda[group]
-    raw_linda <- lapply(wanted_list, function(df) df[, c("ASV","Taxonomy","padj", "log2FoldChange","MEDIAN ALL","Taxonomy")])
+    
+    raw_linda <- lapply(wanted_list, function(df) {
+      df <- merge(df,uni_df[,c("SeqID","MEDIAN_clr_ALL")],by="SeqID",all.x = TRUE)
+      df[, c("SeqID","Taxonomy","padj", "log2FoldChange","MEDIAN_clr_ALL")]
+      return(df)
+      })
+    #raw_linda <- lapply(wanted_list, function(df) df[, c("ASV","Taxonomy","padj", "log2FoldChange","MEDIAN ALL","Taxonomy")])
+    
+    names(raw_linda) <- gsub("(terminal_ileum)|(colon)|(ASV)|(genus)","",names(raw_linda))
+    names(raw_linda) <- gsub("^ +","",names(raw_linda))
+    
     groups <- names(raw_linda)
     groups <- rep(groups, each = 3)
     
     raw_linda <- 
-      suppressWarnings(Reduce(function(x, y) merge(x, y, by = "ASV", all = TRUE), raw_linda))
+      suppressWarnings(Reduce(function(x, y) merge(x, y, by = "SeqID", all = TRUE), raw_linda))
     
-    if (is_dna_sequence(raw_linda$ASV[1])){
+    if (is_dna_sequence(raw_linda$SeqID[1])){
       for (i in 1:nrow(raw_linda)){
         where_taxonomy <- grep("Taxonomy", colnames(raw_linda))
         where_nonnan <- grep(TRUE,(!is.na(raw_linda[i,where_taxonomy])))[1]
@@ -2012,23 +2025,24 @@ dot_heatmap_linda <- function(raw_linda, taxa_table, group=NULL){
           nonnan_taxonomy_genus <- regmatches(nonnan_taxonomy, regexpr("f__.+;s__", nonnan_taxonomy))
           nonnan_taxonomy_genus <- substring(nonnan_taxonomy_genus,1,nchar(nonnan_taxonomy_genus)-4)
         }
-        raw_linda[i,"ASV"] <- nonnan_taxonomy_genus
+        raw_linda[i,"SeqID"] <- nonnan_taxonomy_genus
       }
     }
     
-    asvs <- raw_linda$ASV
+    asvs <- raw_linda$SeqID
     duplicated <- asvs[duplicated(asvs)]
     
     for (duplic in unique(duplicated)){
       where_duplic <- which(asvs==duplic)
       asvs[where_duplic] <- paste(duplic,1:length(where_duplic))
     }
-    raw_linda$ASV <- asvs 
+    raw_linda$SeqID <- asvs 
     
-    
-    raw_linda <- raw_linda[,c(TRUE,!grepl("ASV",colnames(raw_linda)[-1]))]
+    raw_linda <- raw_linda[,c(TRUE,!grepl("SeqID",colnames(raw_linda)[-1]))]
     raw_linda <- raw_linda[,c(TRUE,!grepl("Taxonomy",colnames(raw_linda)[-2]))]
-    colnames(raw_linda) <- c("SeqID","Taxonomy",paste0(groups,c(":padj",":log2FoldChange",":MEDIAN ALL")))
+    raw_linda <- raw_linda[,!grepl("p_value",colnames(raw_linda))]
+    
+    colnames(raw_linda) <- c("SeqID","Taxonomy",paste0(groups,c(":log2FoldChange",":padj",":MEDIAN_clr_ALL")))
   }
   #raw_linda %<>% dplyr::bind_cols(.name_repair = "unique")
   
@@ -2041,7 +2055,9 @@ dot_heatmap_linda <- function(raw_linda, taxa_table, group=NULL){
   
   or_logic <- rep(FALSE,dim(raw_linda)[1])
   for (col in grep(":padj",colnames(raw_linda))){
-    or_logic <- (or_logic) | (raw_linda[,col] < 0.1)
+    or_logic <- (or_logic) | ifelse(is.na(raw_linda[,col] < 0.1),
+                                    FALSE,
+                                    (raw_linda[,col] < 0.1))
   }
   
   raw_linda_reduced <- raw_linda[or_logic,] # %>%
@@ -2050,8 +2066,7 @@ dot_heatmap_linda <- function(raw_linda, taxa_table, group=NULL){
   # Extract relevant columns
   fold_cols <-  grep(":log2FoldChange", colnames(raw_linda_reduced), value= TRUE)
   pval_cols <- grep(":padj", colnames(raw_linda_reduced), value= TRUE)
-  median_cols <- grep(":MEDIAN ALL", colnames(raw_linda_reduced), value= TRUE)
-  
+  median_cols <- grep(":MEDIAN_clr_ALL", colnames(raw_linda_reduced), value= TRUE)
   effect_columns <- grep("effect:padj", colnames(raw_linda_reduced))
   
   # Create a data frame with estimates and p-values
@@ -2109,14 +2124,14 @@ dot_heatmap_linda <- function(raw_linda, taxa_table, group=NULL){
   # Remove ":Est" and ":pval" from variable names for easier merging
   plot_df_melt_fold$Variable <- gsub(":log2FoldChange", "", plot_df_melt_fold$Variable)
   plot_df_melt_pval$Variable <- gsub(":padj", "", plot_df_melt_pval$Variable)
-  plot_df_melt_median$Variable <- gsub(":MEDIAN ALL", "", plot_df_melt_median$Variable)
+  plot_df_melt_median$Variable <- gsub(":MEDIAN_clr_ALL", "", plot_df_melt_median$Variable)
   
   # Combine estimates and significance stars into one dataframe
   plot_df_combined <- base::merge(plot_df_melt_fold, plot_df_melt_pval, by = c("SeqID","Variable"))
   plot_df_combined <- base::merge(plot_df_combined, plot_df_melt_median, by = c("SeqID","Variable"))
   
   # Check for NAs and remove them if necessary
-  #plot_df_combined <- na.omit(plot_df_combined)
+  plot_df_combined <- na.omit(plot_df_combined,)
   
   plot_df_combined %<>% mutate(median_clr = Median)
   plot_df_combined$SeqID <- factor(plot_df_combined$SeqID,levels = plot_df$SeqID)
@@ -2141,6 +2156,7 @@ dot_heatmap_linda <- function(raw_linda, taxa_table, group=NULL){
   plot_df_combined$Variable <- gsub("non-rPSC vs rPSC","rPSC vs non-rPSC",plot_df_combined$Variable)
   
   plot_df_combined$Variable <- gsub("pre_LTx vs post_LTx","post_LTx vs pre_LTx",plot_df_combined$Variable)
+
   plot_df_combined$Variable <- gsub("  ","",plot_df_combined$Variable)
   
   if (TRUE %in% (grepl("post_LTx",plot_df_combined$Variable))){
@@ -2271,7 +2287,8 @@ volcano_plot_maaslin <- function(maaslin_output,taxa_table,cutoff.pval=0.05, cut
   
   data_called <- data_df[called,]
   taxa_table <- taxa_table %>% column_to_rownames("SeqID")
-  data_called$name <- taxa_table[data_called$name,"Genus"]
+  taxonomic_level <- colnames(taxa_table)[ncol(taxa_table)]
+  data_called$name <- taxa_table[data_called$name,taxonomic_level]
   
   maximum <- max(c(abs(min(data_df$x)), abs(max(data_df$x))))
   p <- ggplot(data=data_df, aes(x=x,y=y)) +
@@ -2684,6 +2701,8 @@ rawlinda.df <- function(linda.output,group,uni_data,uni_taxa){
   } else {
     raw_linda_result <- data.frame(
       SeqID=rownames(linda.output[[group]]),
+      Taxonomy=create_asv_taxa_table(uni_data[rownames(linda.output[[group]]),] %>% 
+                                       rownames_to_column("SeqID"),uni_taxa)$SeqID,
       log2FoldChange=linda.output[[group]]$log2FoldChange,
       p_value=linda.output[[group]]$pvalue,
       padj=linda.output[[group]]$padj)
