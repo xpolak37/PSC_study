@@ -1,0 +1,224 @@
+---
+title: "Clinical characteristics"
+output: html_notebook
+---
+
+# Functions
+
+```{r}
+library(cowplot)
+library(openxlsx)
+library(tidyverse)
+
+get_birth_day <- function(birth_number) {
+  # Extract YYMMDD part
+  if (nchar(unlist((strsplit(birth_number,split = "/")))[1])<6) return(NA)
+  else {
+    yymmdd <- substr(birth_number, 1, 6)
+    
+    # Extract year, month, and day
+    year <- as.numeric(substr(yymmdd, 1, 2))
+    month <- as.numeric(substr(yymmdd, 3, 4))
+    day <- as.numeric(substr(yymmdd, 5, 6))
+    
+    # Adjust for female (month > 12)
+    if (month > 12) {
+      month <- month - 50
+    }
+    if (day>31) day <- 1
+    if (year<20) year <- year + 2000
+    else year <- year + 1900
+    date_birth <- as.Date(paste(year,month,day,sep = "-"))
+    # Return the day
+    return(date_birth)
+  }
+}
+```
+
+# Import metadata
+
+```{r, eval=FALSE}
+## Clinical characteristics ----
+pacienti <- read.xlsx("pacienti/final_metadata/pacienti_zoznam_clanok_only.xlsx")
+pacienti <- pacienti[,c(1,2,3,4,7)]
+pacienti$PatientID <- as.character(pacienti$PatientID)
+
+metadata_final <- read.xlsx("pacienti/final_metadata/metadata_final_clinical.xlsx")
+metadata_cz <- metadata_final[metadata_final$Country=="CZ",]
+metadata_clanok <- metadata_cz  %>% full_join(pacienti, by="PatientID")
+metadata_clanok <- metadata_clanok[!is.na(metadata_clanok$dys_filtered_asv),]
+
+metadata_clanok$Sex <- ifelse(substring(metadata_clanok$Rcislo,3,4) >= 50,"F","M")
+
+ages <- c()
+for (i in 1:nrow(metadata_clanok)){
+  pacient_id <- metadata_clanok[i,"PatientID"]
+  datum <- metadata_clanok[i,"Kolonoskopie"]
+  if (grepl("\"",datum)) datum <- gsub("\"","",datum)
+  r_cislo <- metadata_clanok[i,"Rcislo"]
+  group <- metadata_clanok[i,"Group"]
+  datum_narodenia <- get_birth_day(r_cislo)
+  if (is.na(datum_narodenia)) cat(pacient_id,"\n")
+  else {
+    if (is.na(datum)) datum <- "NE"
+    if (datum=="NE") age <- NA
+    else {
+      age <- (floor(as.numeric(difftime(as.Date(datum),datum_narodenia,units ="days") /365)))
+    }
+  }
+  ages <- c(ages,age)
+}
+
+metadata_clanok$Age <- ages
+#write.xlsx(metadata_clanok,"pacienti/final_metadata/tabulka_clanok_cz.xlsx")
+```
+
+```{r}
+metadata_clanok <- read.xlsx("pacienti/final_metadata/tabulka_clanok_cz.xlsx")
+```
+
+```{r}
+metadata_final_cz <- metadata_clanok
+
+
+metadata_final_cz[,c(3,8,9)] %>% group_by(PatientID) %>%
+  distinct() %>%
+  group_by(Group) %>%
+  count(Group)  %>% as.data.frame()
+```
+
+```{r}
+metadata_final_no <- metadata_final[metadata_final$Country=="NO",]
+metadata_final_no <- metadata_final_no[!is.na(metadata_final_no$dys_filtered_asv),]
+
+metadata_final_no[,c(3,8,9)] %>% group_by(PatientID) %>%
+  distinct() %>%
+  group_by(Group) %>%
+  count(Group)  %>% as.data.frame()
+```
+
+# GROUPBY
+
+```{r}
+metadata_for_boxplots <- metadata_clanok[,c(3,8,10:28,38,39)] %>%
+  group_by(PatientID) %>%
+  distinct() %>%
+  as.data.frame()
+
+metadata_for_boxplots$kalprotektin[metadata_for_boxplots$kalprotektin==">6000"] <- 6000
+metadata_for_boxplots$kalprotektin <- as.numeric(metadata_for_boxplots$kalprotektin)
+
+a <- metadata_for_boxplots %>% group_by(Group) %>% 
+  summarise(across(where(is.numeric), ~ median(.x, na.rm = TRUE))) %>%
+  t() %>% as.data.frame() %>% rownames_to_column("Variable") 
+
+#write.xlsx(a,"pacienti/final_metadata/median.xlsx")
+
+b <- metadata_for_boxplots %>% group_by(Group) %>% 
+  summarise(across(where(is.numeric), ~ min(.x, na.rm = TRUE))) %>%
+  t() %>% as.data.frame() %>% rownames_to_column("Variable")
+
+#write.xlsx(b,"pacienti/final_metadata/min.xlsx")
+
+c <- metadata_for_boxplots %>% group_by(Group) %>% 
+  summarise(across(where(is.numeric), ~ max(.x, na.rm = TRUE))) %>%
+  t() %>% as.data.frame() %>% rownames_to_column("Variable")
+
+#write.xlsx(c,"pacienti/final_metadata/max.xlsx")
+
+metadata_for_boxplots %>% group_by(Group) %>%
+  count(Sex) 
+
+
+```
+# Combine
+
+```{r}
+result <- as.data.frame(mapply(function(x, y, z) paste0(x, " (", y, "-", z, ")"), 
+                               a, b, c, SIMPLIFY = FALSE))
+```
+
+# Test 
+
+```{r}
+variables <- c("bilirubin",
+               "ALP",
+               "kalprotektin",
+               "mayo_psc_risk_score",
+               "aom_score", 
+               "apri_score",
+               "fib4_score")
+```
+
+```{r}
+test_df <- data.frame(`Variable`=NA,
+                      `healthy vs pre_LTx`=NA,
+                      `healthy vs non-rPSC`=NA,
+                      `healthy vs rPSC`=NA,
+                      `pre_LTx vs non-rPSC`=NA,
+                      `pre_LTx vs rPSC`=NA,
+                      `non-rPSC vs rPSC`=NA)
+
+i <- 1
+for (clinical_variable in variables){
+  df <- metadata_for_boxplots %>% dplyr::select("Group",clinical_variable)
+  df$Group <- factor(df$Group,levels=c("healthy","non-rPSC","rPSC","pre_ltx"))
+  df <- df %>% drop_na()
+  p_test <- pairwise.wilcox.test(df[,clinical_variable], df$Group,
+                 p.adjust.method = "BH")$p.value
+  if (length(unique(df$Group))==4){
+    test_df[i,] <- c(clinical_variable,p_test[3,1],p_test[1,1],p_test[2,1],
+                   p_test[3,2],p_test[3,3],p_test[2,2])
+  } else{
+    cat(as.character(unique(df$Group)),"\n")
+  }
+
+  if (TRUE %in% (dim(p_test) != c(3,3))) next
+
+  i <- i +1
+  
+}
+
+test_df[,-1] <- as.numeric(as.matrix(test_df[,-1]))
+significance_df <- test_df[,-1]
+significance_df[test_df[,-1] <= 0.05] <-'*'
+significance_df[test_df[,-1] <= 0.01] <-'**'
+significance_df[test_df[,-1] <= 0.001] <-'***'
+significance_df$Variable <- test_df$Variable
+write.xlsx(significance_df,"results/clinical/significance.xlsx")
+```
+
+# IBD
+
+```{r}
+tabulka_clanok_cz <- read.xlsx("pacienti/final_metadata/tabulka_clanok_cz.xlsx")
+ibd_df <- read.xlsx("pacienti/IBD_info.xlsx")
+```
+
+```{r}
+pacienti <- unique(tabulka_clanok_cz$PatientID)
+
+for (pacient in pacienti){
+  subdf <- tabulka_clanok_cz[tabulka_clanok_cz$PatientID==pacient,]
+  rows <- rownames(subdf)
+  has_ibd_info <- !is.na(unique(subdf$ibd))
+  if (!has_ibd_info) {
+    ibd_bool <- ibd_df[ibd_df$`čislo.pacienta`==as.numeric(pacient),c(5,6,7,8)]
+    if (nrow(ibd_bool)>0) tabulka_clanok_cz[rows,c("PSC-IBD_new","UC_preTx","denovo_UC","Crohn")] <- ibd_bool
+  }
+}
+```
+
+```{r}
+write.xlsx(tabulka_clanok_cz,"pacienti/final_metadata/tabulka_clanok_cz_IBD.xlsx")
+```
+
+```{r}
+ibd_df <- read.xlsx("pacienti/final_metadata/tabulka_clanok_cz_IBD.xlsx")
+
+no_ibd <- unique(ibd_df[ibd_df$`PSC-IBD_new`== 0,"PatientID"])
+yes_ibd <- unique(ibd_df[ibd_df$`PSC-IBD_new`== 1,"PatientID"])
+```
+
+
+
