@@ -426,6 +426,18 @@ caption = "Raw results of linear model of Pielou estimation.")
 knitr::kable(results_model_pielou_emeans,digits = 3,
 caption = "Raw results of independent country analysis")
 ```
+### Saving results
+
+```{r}
+alpha_list <- list(
+  Richness=pc_observed[[segment]] %>% rownames_to_column("Comparison"),
+  Shannon=pc_shannon[[segment]] %>% rownames_to_column("Comparison"),
+  Simpson=pc_simpson[[segment]] %>% rownames_to_column("Comparison"),
+  Pielou=pc_pielou[[segment]] %>% rownames_to_column("Comparison"))
+                   
+write.xlsx(alpha_list, 
+           file = file.path(path,"alpha_diversity_results_terminal_ileum.xlsx"))
+```
 
 ## Beta diversity
 
@@ -438,6 +450,10 @@ data), both at ASV and genus level.
 
 ```{r}
 level="genus"
+```
+
+```{r}
+path = "../results/Q1/beta_diversity"
 ```
 
 ```{r}
@@ -470,10 +486,10 @@ filt_ileum_metadata <- filt_data[[3]]
 pairwise_df <- filt_ileum_genus_tab %>% column_to_rownames("SeqID") %>% t()
 
 # main effect
-pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.function = "robust.aitchison", p.adjust.m="BH")
+pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "robust.aitchison", p.adjust.m="BH")
 
 # interaction
-pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.function = "robust.aitchison", p.adjust.m="BH")
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "robust.aitchison", p.adjust.m="BH")
 
 # tidy the results
 pp_factor <- pp_main[[1]]
@@ -532,6 +548,14 @@ pca_plots_list[[paste(segment,level,"custom")]] <- p
 p
 ```
 
+#### Saving results
+
+```{r}
+write.xlsx(pairwise_aitchison_raw[[paste(level, segment)]], 
+           file = file.path(path,
+           paste0("beta_diversity_results_", segment,".xlsx")))
+```
+
 ### Supplementary analysis
 
 ```{r}
@@ -552,10 +576,10 @@ level="genus"
 pairwise_df <- filt_ileum_genus_tab %>% column_to_rownames("SeqID") %>% t()
 
 # main effect
-pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.function = "bray", p.adjust.m="BH")
+pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "bray", p.adjust.m="BH")
 
 # interaction
-pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.function = "bray", p.adjust.m="BH")
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "bray", p.adjust.m="BH")
 
 # tidy the results
 pp_factor <- pp_main[[1]]
@@ -622,10 +646,10 @@ p
 pairwise_df <- filt_ileum_genus_tab %>% column_to_rownames("SeqID") %>% t()
 
 # main effect
-pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.function = "jaccard", p.adjust.m="BH")
+pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "jaccard", p.adjust.m="BH")
 
 # interaction
-pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.function = "jaccard", p.adjust.m="BH")
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "jaccard", p.adjust.m="BH")
 
 # tidy the results
 pp_factor <- pp_main[[1]]
@@ -703,10 +727,10 @@ level="ASV"
 pairwise_df <- filt_ileum_asv_tab %>% column_to_rownames("SeqID") %>% t()
 
 # main effect
-pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.function = "robust.aitchison", p.adjust.m="BH")
+pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "robust.aitchison", p.adjust.m="BH")
 
 # interaction
-pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.function = "robust.aitchison", p.adjust.m="BH")
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "robust.aitchison", p.adjust.m="BH")
 
 pp_factor <- pp_main[[1]]
 pp_cov <- pp_main[[2]]
@@ -773,10 +797,10 @@ p
 pairwise_df <- filt_ileum_asv_tab %>% column_to_rownames("SeqID") %>% t()
 
 # main effect
-pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.function = "bray", p.adjust.m="BH")
+pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "bray", p.adjust.m="BH")
 
 # interaction
-pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.function = "bray", p.adjust.m="BH")
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "bray", p.adjust.m="BH")
 
 pp_factor <- pp_main[[1]]
 pp_cov <- pp_main[[2]]
@@ -846,10 +870,10 @@ p
 pairwise_df <- filt_ileum_asv_tab %>% column_to_rownames("SeqID") %>% t()
 
 # main effect
-pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.function = "jaccard", p.adjust.m="BH")
+pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "jaccard", p.adjust.m="BH")
 
 # interaction
-pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.function = "jaccard", p.adjust.m="BH")
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "jaccard", p.adjust.m="BH")
 
 pp_factor <- pp_main[[1]]
 pp_cov <- pp_main[[2]]
@@ -907,6 +931,14 @@ supplements_beta[[paste("PCoA jaccard",level,segment)]] <- p
 
 # see the results
 p
+```
+
+#### Saving results
+
+```{r}
+write.xlsx(supplements_beta[!grepl("PCoA",names(supplements_beta))],
+           file = file.path(path,
+           paste0("supplements_beta_diversity_", segment,".xlsx")))
 ```
 
 ## Univariate Analysis
@@ -1507,9 +1539,19 @@ psc_effect[[paste(segment,level)]]
 #### Saving results
 
 ```{r}
+# ALL DATA
 saveWorkbook(wb,file.path(path,paste0("uni_analysis_wb_",segment,".xlsx")),
              overwrite = TRUE)
+
+# PSC effect
 write.xlsx(psc_effect[[paste(segment,level)]],file.path(path,paste0("psc_effect_",segment,".xlsx")))
+
+# SIGNIFICANT taxa
+
+write.xlsx(list_intersections[grepl(segment,names(list_intersections))] %>%
+            `names<-`(gsub(segment, "", names(
+              list_intersections[grepl(segment,names(list_intersections))]))),
+           file.path(path,paste0("significant_taxa_",segment,".xlsx")))
 ```
 
 ### Supplementary Analysis
@@ -2663,12 +2705,20 @@ psc_effect[[paste(segment,level)]]
 #### Saving results
 
 ```{r}
-saveWorkbook(supplements_wb,file.path(path,paste0("supplements_uni_analysis_wb_",segment,".xlsx")))
+# ALL DATA
+saveWorkbook(supplements_wb,file.path(path,paste0("supplements_uni_analysis_wb_",segment,".xlsx")),overwrite = TRUE)
 
+# PSC effect
 write.xlsx(psc_effect,
-          file.path(path,"univariate_analysis",paste0("supplements_psc_effect_",segment,".csv")),
-          row.names = FALSE)
+          file.path(path,paste0("supplements_psc_effect_",segment,".csv")))
+
+# SIGNIFICANT taxa
+write.xlsx(list_intersections[grepl(segment,names(list_intersections))] %>%
+            `names<-`(gsub(segment, "", names(
+              list_intersections[grepl(segment,names(list_intersections))]))),
+           file.path(path,paste0("supplements_significant_taxa_",segment,".xlsx")))
 ```
+
 
 ## Machine learning
 
@@ -3022,8 +3072,8 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(knn_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["knn"]][[model_name]] <- knn_model$model_summary
-supplements_models[["roc_cs"]][["knn"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
 
 # see the results
 knn_model$model_summary %>% t()
@@ -3060,8 +3110,8 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(knn_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["knn"]][[model_name]] <- knn_model$model_summary
-supplements_models[["roc_cs"]][["knn"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
 
 
 # see the results
@@ -3099,8 +3149,8 @@ roc_c <- roc_curve(knn_model, group)
 
 # save the results
 # save the results
-supplements_models[["models_summ"]][["knn"]][[model_name]] <- knn_model$model_summary
-supplements_models[["roc_cs"]][["knn"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
 
 # see the results
 knn_model$model_summary %>% t()
@@ -3154,8 +3204,8 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(knn_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["knn"]][[model_name]] <- knn_model$model_summary
-supplements_models[["roc_cs"]][["knn"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
 
 
 # see the results
@@ -3193,8 +3243,8 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(knn_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["knn"]][[model_name]] <- knn_model$model_summary
-supplements_models[["roc_cs"]][["knn"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
 
 
 # see the results
@@ -3232,8 +3282,8 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(knn_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["knn"]][[model_name]] <- knn_model$model_summary
-supplements_models[["roc_cs"]][["knn"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
 
 
 # see the results
@@ -3282,8 +3332,8 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf"]][[model_name]] <- rf_model$model_summary
-supplements_models[["roc_cs"]][["rf"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
 
 # see the results
 rf_model$model_summary %>% t()
@@ -3319,8 +3369,8 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf"]][[model_name]] <- rf_model$model_summary
-supplements_models[["roc_cs"]][["rf"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
 
 # see the results
 rf_model$model_summary %>% t()
@@ -3356,8 +3406,8 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf"]][[model_name]] <- rf_model$model_summary
-supplements_models[["roc_cs"]][["rf"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
 
 # see the results
 rf_model$model_summary %>% t()
@@ -3411,8 +3461,8 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf"]][[model_name]] <- rf_model$model_summary
-supplements_models[["roc_cs"]][["rf"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
 
 # see the results
 rf_model$model_summary %>% t()
@@ -3449,8 +3499,8 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf"]][[model_name]] <- rf_model$model_summary
-supplements_models[["roc_cs"]][["rf"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
 
 # see the results
 rf_model$model_summary %>% t()
@@ -3487,8 +3537,8 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf"]][[model_name]] <- rf_model$model_summary
-supplements_models[["roc_cs"]][["rf"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
 
 # see the results
 rf_model$model_summary %>% t()
@@ -3498,13 +3548,13 @@ roc_c
 ##### Gradient boosting
 
 ```{r}
-level="gb"
+model="gb"
 ```
 
 ###### ASV level
 
 ```{r}
-level="genus"
+level="ASV"
 ```
 
 ***pre_ltx vs healthy***
@@ -3536,8 +3586,8 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(gbm_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["gbm"]][[model_name]] <- gbm_model$model_summary
-supplements_models[["roc_cs"]][["gbm"]][[model_name]] <- gbm_model$kfold_rocobjs
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
 
 # see the results
 gbm_model$model_summary %>% t()
@@ -3573,8 +3623,8 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(gbm_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["gbm"]][[model_name]] <- gbm_model$model_summary
-supplements_models[["roc_cs"]][["gbm"]][[model_name]] <- gbm_model$kfold_rocobjs
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
 
 
 # see the results
@@ -3611,8 +3661,8 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(gbm_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["gbm"]][[model_name]] <- gbm_model$model_summary
-supplements_models[["roc_cs"]][["gbm"]][[model_name]] <- gbm_model$kfold_rocobjs
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
 
 
 # see the results
@@ -3667,8 +3717,8 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(gbm_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["gbm"]][[model_name]] <- gbm_model$model_summary
-supplements_models[["roc_cs"]][["gbm"]][[model_name]] <- gbm_model$kfold_rocobjs
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
 
 # see the results
 gbm_model$model_summary %>% t()
@@ -3705,8 +3755,8 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(gbm_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["gbm"]][[model_name]] <- gbm_model$model_summary
-supplements_models[["roc_cs"]][["gbm"]][[model_name]] <- gbm_model$kfold_rocobjs
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
 
 # see the results
 gbm_model$model_summary %>% t()
@@ -3743,8 +3793,8 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(gbm_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["gbm"]][[model_name]] <- gbm_model$model_summary
-supplements_models[["roc_cs"]][["gbm"]][[model_name]] <- gbm_model$kfold_rocobjs
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
 
 # see the results
 gbm_model$model_summary %>% t()
@@ -3791,9 +3841,9 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(enet_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["glmnet_ra"]][[model_name]] <- enet_model$model_summary
+supplements_models[["models_summ"]][["enet_model_ra"]][[model_name]] <- enet_model$model_summary
 
-supplements_models[["roc_cs"]][["glmnet_ra"]][[model_name]] <- enet_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["enet_model_ra"]][[model_name]] <- enet_model$kfold_rocobjs
 
 # see the results
 enet_model$model_summary %>% t()
@@ -4049,9 +4099,9 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(knn_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["knn_ra"]][[model_name]] <- knn_model$model_summary
+supplements_models[["models_summ"]][["knn_model_ra"]][[model_name]] <- knn_model$model_summary
 
-supplements_models[["roc_cs"]][["knn_ra"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["knn_model_ra"]][[model_name]] <- knn_model$kfold_rocobjs
 
 # see the results
 knn_model$model_summary %>% t()
@@ -4087,9 +4137,9 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(knn_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["knn_ra"]][[model_name]] <- knn_model$model_summary
+supplements_models[["models_summ"]][["knn_model_ra"]][[model_name]] <- knn_model$model_summary
 
-supplements_models[["roc_cs"]][["knn_ra"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["knn_model_ra"]][[model_name]] <- knn_model$kfold_rocobjs
 
 # see the results
 knn_model$model_summary %>% t()
@@ -4125,9 +4175,9 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(knn_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["knn_ra"]][[model_name]] <- knn_model$model_summary
+supplements_models[["models_summ"]][["knn_model_ra"]][[model_name]] <- knn_model$model_summary
 
-supplements_models[["roc_cs"]][["knn_ra"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["knn_model_ra"]][[model_name]] <- knn_model$kfold_rocobjs
 
 # see the results
 knn_model$model_summary %>% t()
@@ -4181,9 +4231,9 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(knn_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["knn_ra"]][[model_name]] <- knn_model$model_summary
+supplements_models[["models_summ"]][["knn_model_ra"]][[model_name]] <- knn_model$model_summary
 
-supplements_models[["roc_cs"]][["knn_ra"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["knn_model_ra"]][[model_name]] <- knn_model$kfold_rocobjs
 
 # see the results
 knn_model$model_summary %>% t()
@@ -4220,9 +4270,9 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(knn_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["knn_ra"]][[model_name]] <- knn_model$model_summary
+supplements_models[["models_summ"]][["knn_model_ra"]][[model_name]] <- knn_model$model_summary
 
-supplements_models[["roc_cs"]][["knn_ra"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["knn_model_ra"]][[model_name]] <- knn_model$kfold_rocobjs
 
 # see the results
 knn_model$model_summary %>% t()
@@ -4259,9 +4309,9 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(knn_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["knn_ra"]][[model_name]] <- knn_model$model_summary
+supplements_models[["models_summ"]][["knn_model_ra"]][[model_name]] <- knn_model$model_summary
 
-supplements_models[["roc_cs"]][["knn_ra"]][[model_name]] <- knn_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["knn_model_ra"]][[model_name]] <- knn_model$kfold_rocobjs
 
 # see the results
 knn_model$model_summary %>% t()
@@ -4305,9 +4355,9 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf_ra"]][[model_name]] <- rf_model$model_summary
+supplements_models[["models_summ"]][["rf_model_ra"]][[model_name]] <- rf_model$model_summary
 
-supplements_models[["roc_cs"]][["rf_ra"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["rf_model_ra"]][[model_name]] <- rf_model$kfold_rocobjs
 
 # see the results
 rf_model$model_summary %>% t()
@@ -4343,9 +4393,9 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf_ra"]][[model_name]] <- rf_model$model_summary
+supplements_models[["models_summ"]][["rf_model_ra"]][[model_name]] <- rf_model$model_summary
 
-supplements_models[["roc_cs"]][["rf_ra"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["rf_model_ra"]][[model_name]] <- rf_model$kfold_rocobjs
 
 
 # see the results
@@ -4382,9 +4432,9 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf_ra"]][[model_name]] <- rf_model$model_summary
+supplements_models[["models_summ"]][["rf_model_ra"]][[model_name]] <- rf_model$model_summary
 
-supplements_models[["roc_cs"]][["rf_ra"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["rf_model_ra"]][[model_name]] <- rf_model$kfold_rocobjs
 
 
 # see the results
@@ -4439,9 +4489,9 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf_ra"]][[model_name]] <- rf_model$model_summary
+supplements_models[["models_summ"]][["rf_model_ra"]][[model_name]] <- rf_model$model_summary
 
-supplements_models[["roc_cs"]][["rf_ra"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["rf_model_ra"]][[model_name]] <- rf_model$kfold_rocobjs
 
 
 # see the results
@@ -4479,9 +4529,9 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf_ra"]][[model_name]] <- rf_model$model_summary
+supplements_models[["models_summ"]][["rf_model_ra"]][[model_name]] <- rf_model$model_summary
 
-supplements_models[["roc_cs"]][["rf_ra"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["rf_model_ra"]][[model_name]] <- rf_model$kfold_rocobjs
 
 
 # see the results
@@ -4519,9 +4569,9 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
 roc_c <- roc_curve(rf_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["rf_ra"]][[model_name]] <- rf_model$model_summary
+supplements_models[["models_summ"]][["rf_model_ra"]][[model_name]] <- rf_model$model_summary
 
-supplements_models[["roc_cs"]][["rf_ra"]][[model_name]] <- rf_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["rf_model_ra"]][[model_name]] <- rf_model$kfold_rocobjs
 
 
 # see the results
@@ -4784,16 +4834,21 @@ supplements_models[["roc_cs"]][["gbm_ra"]][[model_name]] <- gbm_model$kfold_roco
 gbm_model$model_summary %>% t()
 roc_c
 ```
+
 #### Saving results
 
 ```{r}
+models_list <- list()
 
 for (model_name in names(supplements_models$models_summ)){
-  models_summ_df <- do.call(rbind, 
-  supplements_models$models_summ[model_name])
-  write.csv(models_summ_df,file.path(path,paste0(model_name,"_",segment,".csv")))
-
+  df <- do.call(rbind, supplements_models$models_summ[[model_name]])
+  models_list[[model_name]] <- df
 }
+
+write.xlsx(models_list,
+           file=file.path(path,paste0("supplements_models_",segment,".xlsx")),
+           rowNames=TRUE)
+
 ```
 
 ## Results overview
@@ -4801,60 +4856,51 @@ for (model_name in names(supplements_models$models_summ)){
 #### Alpha diversity
 
 ```{r}
-pc_observed$terminal_ileum
-pc_shannon$terminal_ileum
-pc_simpson$terminal_ileum
-pc_pielou$terminal_ileum
-
-write.xlsx(x = list(pc_observed$terminal_ileum %>% rownames_to_column("Comparison"),
-                    pc_shannon$terminal_ileum %>% rownames_to_column("Comparison"),
-                    pc_simpson$terminal_ileum %>% rownames_to_column("Comparison"),
-                    pc_pielou$terminal_ileum %>% rownames_to_column("Comparison")), 
-           file = "results/Q1/alpha_diversity_results_terminal_ileum.xlsx",
-            )
+pc_observed[[segment]]
+pc_shannon[[segment]]
+pc_simpson[[segment]]
+pc_pielou[[segment]]
 ```
 
 Plots
 
 ```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE}
-alpha_div_plots[["Ileum Country"]]
+alpha_div_plots[[paste(segment,"Country")]]
 ```
 
 ```{r, fig.width=7, fig.height=4, fig.fullwidth=TRUE}
-alpha_div_plots[["Ileum Custom"]]
+alpha_div_plots[[paste(segment,"Custom")]]
 ```
 
 #### Beta diversity
 
-**Raw results**
+**Main results**
 
 ```{r}
-pairwise_aitchison_raw$`ASV ileum`
-pairwise_aitchison_raw$`Genus ileum`
-
-write.xlsx(x = list(pairwise_aitchison_raw$`ASV ileum`,
-                    pairwise_aitchison_raw$`Genus ileum`), 
-           file = "results/Q1/beta_diversity_results_terminal_ileum.xlsx")
+pairwise_aitchison_raw[[paste("genus", segment)]]
 ```
 
-**PCA at ASV level**
+PCA
 
-```{r, fig.width=10, fig.height=10, fig.fullwidth=TRUE, eval=FALSE}
-pca_plots_list$`Q1 Ileum ASV`
+```{r, fig.width=5, fig.height=3, fig.fullwidth=TRUE, eval=TRUE}
+pca_plots_list[[paste(segment,"genus custom")]]
 ```
 
-```{r, fig.width=7, fig.height=5, fig.fullwidth=TRUE}
-pca_plots_list$`Q1 Ileum ASV custom`
+**Supplements**
+
+```{r}
+knitr::kable(supplements_beta[!grepl("PCoA",names(supplements_beta))],
+             digits = 3,
+             caption = "Supplementary PERMANOVA results")
 ```
 
-**PCA at Genus level**
+PCA
 
-```{r, fig.width=10, fig.height=10, fig.fullwidth=TRUE, eval=FALSE}
-pca_plots_list$`Q1 Ileum Genus`
-```
-
-```{r, fig.width=7, fig.height=5, fig.fullwidth=TRUE}
-pca_plots_list$`Q1 Ileum Genus custom`
+```{r, fig.width=8, fig.height=7, fig.fullwidth=TRUE, eval=FALSE}
+ggarrange(plotlist = supplements_beta[grepl("PCoA",names(supplements_beta))],
+          labels=names(supplements_beta[grepl("PCoA",names(supplements_beta))]),
+          font.label = list(size=5,face="plain"),
+          ncol=2,nrow=3)
 ```
 
 #### Univariate analysis
@@ -4862,71 +4908,101 @@ pca_plots_list$`Q1 Ileum Genus custom`
 **Number of significant taxa**
 
 ```{r}
-cbind(as.data.frame(lapply(list_intersections,nrow)),
+knitr::kable(cbind(as.data.frame(lapply(list_intersections,nrow)),
       as.data.frame(lapply(psc_effect,nrow))) %>% t() %>% 
   `colnames<-`("Count") %>% 
-  `rownames<-`(c(names(list_intersections),"PSC effect ASV","PSC effect Genus"))
-```
-
-```{r}
-# save the results
-write.xlsx(x = list_intersections[grep("Ileum",names(list_intersections),value=TRUE)],
-           file = "results/Q1/DAA_terminal_ileum.xlsx")
-
-write.xlsx(x = psc_effect[grep("Ileum",names(psc_effect),value=TRUE)], 
-           file = "results/Q1/PSC_effect_terminal_ileum.xlsx")
-
-saveWorkbook(wb,"results/Q1/DAA_linDA_Maaslin_terminal_ileum.xlsx", overwrite = TRUE)
+  `rownames<-`(c(names(list_intersections),"PSC effect ASV","PSC effect Genus","PSC effect Phylum")),caption="Number of significant taxa")
 ```
 
 **Counts**
 
-```{r}
-univar_list <- univariate_statistics(list_intersections,
-                                     psc_effect,
-                                     ileum_genus_asv_taxa_tab)
-
-univar_df <- univar_list[[1]]
-wb <- univar_list[[2]]
-
-# save the results
-saveWorkbook(wb,"results/Q1/DAA_final_terminal_ileum.xlsx", overwrite = TRUE)
-
-# see the results
-univar_df
+```{r, eval=FALSE}
+# univar_list <- univariate_statistics(list_intersections,
+#                                      psc_effect,
+#                                      ileum_genus_asv_taxa_tab)
+# 
+# univar_df <- univar_list[[1]]
+# wb <- univar_list[[2]]
+# 
+# # save the results
+# saveWorkbook(wb,"results/Q1/DAA_final_terminal_ileum.xlsx", overwrite = TRUE)
+# 
+# # see the results
+# univar_df
 ```
 
-#### ElasticNet
+#### Machine learning
+
+**Main models**
 
 Summary
 
 ```{r}
-models_summ_df <- do.call(
-  rbind, 
-  models_summ[grep("terminal_ileum",names(models_summ),value = TRUE)])
-
-# save the results
-write.xlsx(list(binomial=models_summ_df),
-           "results/Q1/elastic_net_summary_terminal_ileum.xlsx", 
-           rowNames=TRUE)
-
-# see the results
-models_summ_df
+knitr::kable(models_summ_df %>% dplyr::select(
+"alpha","lambda",
+"auc_optimism_corrected",
+"auc_optimism_corrected_CIL",
+"auc_optimism_corrected_CIU"),
+             digits=2,caption="Elastic net results")
 ```
 
 **ROC - ASV level**
 
 ```{r}
-roc_curve_all_custom(roc_cs[c(1:3)], "Q1")
+roc_curve_all_custom(roc_cs[c(1:3)], 
+                     Q="Q1",
+                     model_name="enet")
 ```
 
 **ROC - Genus level**
 
 ```{r}
-roc_curve_all_custom(roc_cs[c(4:6)],"Q1")
+roc_curve_all_custom(roc_cs[c(4:6)],Q="Q1",
+                     model_name="enet")
 ```
 
-## Analysis - Colon
+**Supplementary models**
+
+Summary
+
+```{r}
+# Build final dataframe
+models_list[["enet_model"]] <- models_summ_df
+final_df <- tibble(row_names = rownames(models_list[[1]]))
+
+# Loop through models and extract required values
+for (model_name in names(models_list)) {
+  model_df <- models_list[[model_name]]
+  
+  # Combine AUC_optimism_corrected with its CI values
+  final_df[[model_name]] <- paste0(
+    round(model_df$auc_optimism_corrected, 3), 
+    " (", round(model_df$auc_optimism_corrected_CIL, 3), "; ", 
+    round(model_df$auc_optimism_corrected_CIU, 3), ")"
+  )
+}
+
+knitr::kable(final_df, caption="All models")
+```
+
+ROC - ASV
+
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+rocs_list <- supplements_models$roc_cs
+rocs_list[["enet_model"]] <- roc_cs
+
+plot_list <- list()
+
+for (model_name in names(rocs_list)) {
+  plot_list[[model_name]] <- roc_curve_all_custom(rocs_list[[model_name]][c(1:3)],
+                       Q="Q1",
+                       model_name=model_name)
+}
+
+ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=7))
+```
+
+# Analysis - Colon
 
 ### Filtering
 
@@ -5214,7 +5290,7 @@ pairwise_df <- filt_colon_asv_tab %>% column_to_rownames("SeqID") %>% t()
 pp_main <- pairwise.adonis(pairwise_df,
                            filt_colon_metadata$Group,
                            covariate = filt_colon_metadata$Country, 
-                           sim.function = "robust.aitchison", 
+                           sim.method = "robust.aitchison", 
                            p.adjust.m="BH",
                            patients = filt_colon_metadata$Patient)
 
@@ -5222,7 +5298,7 @@ pp_main <- pairwise.adonis(pairwise_df,
 pp_int <- pairwise.adonis(pairwise_df,filt_colon_metadata$Group,
                           covariate = filt_colon_metadata$Country, 
                           interaction = TRUE, 
-                          sim.function = "robust.aitchison", 
+                          sim.method = "robust.aitchison", 
                           p.adjust.m="BH",
                           patients = filt_colon_metadata$Patient)
 
@@ -5346,14 +5422,14 @@ pairwise_df <- filt_colon_genus_tab %>% column_to_rownames("SeqID") %>% t()
 pp_main <- pairwise.adonis(pairwise_df,filt_colon_metadata$Group,
                            covariate = filt_colon_metadata$Country, 
                            patients = filt_colon_metadata$Patient,
-                           sim.function = "robust.aitchison", p.adjust.m="BH")
+                           sim.method = "robust.aitchison", p.adjust.m="BH")
 
 # interaction
 pp_int <- pairwise.adonis(pairwise_df,filt_colon_metadata$Group,
                           covariate = filt_colon_metadata$Country, 
                           interaction = TRUE, 
                           patients = filt_colon_metadata$Patient,
-                          sim.function = "robust.aitchison", p.adjust.m="BH")
+                          sim.method = "robust.aitchison", p.adjust.m="BH")
 
 # tidy the results
 pp_factor <- pp_main[[1]]
@@ -6935,7 +7011,7 @@ saveWorkbook(wb,"results/Q1/DAA_final_colon.xlsx", overwrite = TRUE)
 univar_df
 ```
 
-#### ElasticNet
+#### Machine learning
 
 Summary
 

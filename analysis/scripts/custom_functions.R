@@ -731,7 +731,7 @@ removing_interaction_problems <- function(group,
     
     list_intersections <- lapply(list_intersections, function (x) remove_rownames(x))
   }
-  
+  rownames(list_intersections) <- NULL
   return(list_intersections)
 }
 
@@ -2389,7 +2389,7 @@ roc_curve_all <- function(objects){
   return(p)
 }
 
-roc_curve_all_custom <- function(objects, Q,legend=TRUE){
+roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
   print(names(objects))
   p <- ggplot()
   #colors <- c(
@@ -2413,7 +2413,7 @@ roc_curve_all_custom <- function(objects, Q,legend=TRUE){
   names(colors) <- names(objects)
   
   for (i in 1:length(objects)){
-    load(file.path("results",Q,"models",names(objects)[i],"enet_model.RData"))
+    load(file.path("../intermediate_files","models",Q,names(objects)[i],paste0(model_name,".RData")))
     auc_optimism_corrected <- enet_model$model_summary$auc_optimism_corrected
                   
     aucs <- sapply(objects[[i]],function(df) df$auc)
@@ -2490,7 +2490,7 @@ roc_curve_all_custom <- function(objects, Q,legend=TRUE){
       ylab("Sensitivity") + xlab("1-specificity")
   }
   for (i in 1:length(objects)){
-    load(file.path("results",Q,"models",names(objects)[i],"enet_model.RData"))
+    load(file.path("../intermediate_files","models",Q,names(objects)[i],paste0(model_name,".RData")))
     auc_optimism_corrected <- enet_model$model_summary$auc_optimism_corrected
     
     aucs <- sapply(objects[[i]],function(df) df$auc)
