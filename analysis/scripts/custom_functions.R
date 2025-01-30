@@ -879,7 +879,7 @@ abundance_filtering <- function(abundance_threshold=0.05,asv_table, taxa_tab){
   return(list(filt_asv_table,filt_taxa_tab))
 }
 
-nearzerovar_filtering <- function(asv_tab,taxa_tab,metadata, check_zero_depth){
+nearzerovar_filtering <- function(asv_tab,taxa_tab,metadata){
   asv_tab %<>% column_to_rownames("SeqID")
   groups <- unique(metadata$Group)
   
@@ -907,7 +907,7 @@ check_zero_depth <- function(asv_table, taxa_table, metadata){
     filt_asv_table <- asv_table[,-where]
     filt_metadata <- metadata[metadata$SampleID %in% colnames(filt_asv_table),]
     rownames(filt_metadata) <- NULL
-    data_checked <- data_check(filt_asv_table,taxa_tab)
+    data_checked <- data_check(filt_asv_table,taxa_table)
     filt_asv_table <- data_checked[[1]]
     filt_taxa_tab <- data_checked[[2]]
     return(list(filt_asv_table, filt_taxa_tab, filt_metadata))
@@ -1329,6 +1329,13 @@ adonis_postanalysis <- function(x,factors, covariate, group1, group2,
   x1 = vegdist(x_sub,method=sim.method)
   x2 = data.frame(Fac = factors[(factors %in% c(group1,group2)) & covariate=="NO"])
   
+  if (!(is.null(patients))){
+    x2$Patient <- patients[(factors %in% c(group1,group2)) & covariate=="NO"]
+    perm <- custom_permutations(x_sub,factors = x2$Fac,patients = x2$Patient)
+  } else {
+    perm <- 999
+  }
+  
   group1_group2_no <- adonis2(x1 ~ Fac, data = x2,
                               permutations = perm)
   
@@ -1338,6 +1345,13 @@ adonis_postanalysis <- function(x,factors, covariate, group1, group2,
   x2 = data.frame(Fac = factors[(factors %in% c(group1))],
                   Cov = covariate[(factors %in% c(group1))])
   
+  if (!(is.null(patients))){
+    x2$Patient <- patients[(factors %in% c(group1))]
+    perm <- custom_permutations(x_sub,factors = x2$Fac,patients = x2$Patient)
+  } else {
+    perm <- 999
+  }
+  
   group1_country <- adonis2(x1 ~ Cov, data = x2,
                             permutations = perm)
   
@@ -1346,6 +1360,14 @@ adonis_postanalysis <- function(x,factors, covariate, group1, group2,
   x1 = vegdist(x_sub,method=sim.method)
   x2 = data.frame(Fac = factors[(factors %in% c(group2))],
                   Cov = covariate[(factors %in% c(group2))])
+  
+  if (!(is.null(patients))){
+    x2$Patient <- patients[(factors %in% c(group2))]
+    perm <- custom_permutations(x_sub,factors = x2$Fac,patients = x2$Patient)
+  } else {
+    perm <- 999
+  }
+  
   
   group2_country <- adonis2(x1 ~ Cov, data = x2,
                             permutations = perm)
