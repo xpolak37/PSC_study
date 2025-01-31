@@ -486,7 +486,9 @@ filt_ileum_metadata <- filt_data[[3]]
 pairwise_df <- filt_ileum_genus_tab %>% column_to_rownames("SeqID") %>% t()
 
 # main effect
-pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "robust.aitchison", p.adjust.m="BH")
+pp_main <- pairwise.adonis(pairwise_df,
+                           filt_ileum_metadata$Group,
+                           covariate = filt_ileum_metadata$Country, sim.method = "robust.aitchison", p.adjust.m="BH")
 
 # interaction
 pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "robust.aitchison", p.adjust.m="BH")
@@ -2881,7 +2883,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(ileum_asv_tab,
                              ileum_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 ileum_genus_tab <- genus_data[[1]]
 ileum_genus_taxa_tab <- genus_data[[2]]
@@ -3016,10 +3018,10 @@ roc_c
 #### Saving results
 
 ```{r}
-models_summ_df <- do.call(rbind, 
+models_summ_df_ileum <- do.call(rbind, 
   models_summ[grep(segment,names(models_summ),value = TRUE)])
 
-write.csv(models_summ_df,file.path(path,paste0("elastic_net_",segment,".csv")))
+write.csv(models_summ_df_ileum,file.path(path,paste0("elastic_net_",segment,".csv")))
 ```
 
 
@@ -3168,7 +3170,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(ileum_asv_tab,
                              ileum_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 ileum_genus_tab <- genus_data[[1]]
 ileum_genus_taxa_tab <- genus_data[[2]]
@@ -3425,7 +3427,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(ileum_asv_tab,
                              ileum_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 ileum_genus_tab <- genus_data[[1]]
 ileum_genus_taxa_tab <- genus_data[[2]]
@@ -3681,7 +3683,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(ileum_asv_tab,
                              ileum_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 ileum_genus_tab <- genus_data[[1]]
 ileum_genus_taxa_tab <- genus_data[[2]]
@@ -4453,7 +4455,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(ileum_asv_tab,
                              ileum_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 ileum_genus_tab <- genus_data[[1]]
 ileum_genus_taxa_tab <- genus_data[[2]]
@@ -4712,7 +4714,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(ileum_asv_tab,
                              ileum_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 ileum_genus_tab <- genus_data[[1]]
 ileum_genus_taxa_tab <- genus_data[[2]]
@@ -4938,7 +4940,7 @@ knitr::kable(cbind(as.data.frame(lapply(list_intersections,nrow)),
 Summary
 
 ```{r}
-knitr::kable(models_summ_df %>% dplyr::select(
+knitr::kable(models_summ_df_ileum %>% dplyr::select(
 "alpha","lambda",
 "auc_optimism_corrected",
 "auc_optimism_corrected_CIL",
@@ -4967,7 +4969,7 @@ Summary
 
 ```{r}
 # Build final dataframe
-models_list[["enet_model"]] <- models_summ_df
+models_list[["enet_model"]] <- models_summ_df_ileum
 final_df <- tibble(row_names = rownames(models_list[[1]]))
 
 # Loop through models and extract required values
@@ -5369,7 +5371,7 @@ Aggregation, filtering
 ```{r}
 genus_data <- aggregate_taxa(colon_asv_tab,
                              colon_taxa_tab,
-                             taxonomic_level="Genus",
+                             taxonomic_level=level,
                              names=TRUE)
 
 filt_data <- filtering_steps(genus_data[[1]],
@@ -5409,7 +5411,7 @@ cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig
 colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
 
 # save raw results
-pairwise_aitchison_raw[["Genus colon"]] <-rbind(pp_factor,pp_cov,pp_fac.cov)
+pairwise_aitchison_raw[[paste(level, segment)]] <-rbind(pp_factor,pp_cov,pp_fac.cov)
 
 ```
 
@@ -5642,6 +5644,10 @@ p
 ```
 
 #### ASV level
+
+```{r}
+level="ASV"
+```
 
 ##### Aitchison
 
@@ -5935,6 +5941,10 @@ psc_effect <- list()
 ```
 
 #### Genus level
+
+```{r}
+level="genus"
+```
 
 Aggregate taxa
 
@@ -6557,10 +6567,6 @@ linda.obj <- linda(filt_colon_uni_data,
 linda.output <- linda.obj$output
 linda.output <- linda_renaming(linda.output, group)
 
-# save the results
-raw_linda_results[["colon"]] <- list()
-linda_results[["colon"]] <- list()
-
 group1 <- paste0(group[1], " vs ","Group",group[2])
 group2 <- paste0(group[1], " , ",group[2], " - CZ vs NO") 
 group3 <- paste0(group[1], " vs ","Group",group[2], ":CountryNO")
@@ -7126,10 +7132,6 @@ linda.obj <- linda(filt_colon_uni_data,
 linda.output <- linda.obj$output
 linda.output <- linda_renaming(linda.output, group)
 
-# save the results
-raw_linda_results[["colon"]] <- list()
-linda_results[["colon"]] <- list()
-
 group1 <- paste0(group[1], " vs ","Group",group[2])
 group2 <- paste0(group[1], " , ",group[2], " - CZ vs NO") 
 group3 <- paste0(group[1], " vs ","Group",group[2], ":CountryNO")
@@ -7683,7 +7685,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -7724,7 +7726,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -7769,7 +7771,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -7801,7 +7803,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(colon_asv_tab,
                              colon_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 colon_genus_tab <- genus_data[[1]]
 colon_genus_taxa_tab <- genus_data[[2]]
@@ -7831,7 +7833,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -7876,7 +7878,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -7921,7 +7923,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group",
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -7944,10 +7946,10 @@ roc_c
 #### Saving results
 
 ```{r}
-models_summ_df <- do.call(rbind, 
+models_summ_df_colon <- do.call(rbind, 
   models_summ[grep(segment,names(models_summ),value = TRUE)])
 
-write.csv(models_summ_df,file.path(path,paste0("elastic_net_",segment,".csv")))
+write.csv(models_summ_df_colon,file.path(path,paste0("elastic_net_",segment,".csv")))
 ```
 
 ### Supplementary models
@@ -7989,7 +7991,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8029,7 +8031,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8069,7 +8071,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8097,7 +8099,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(colon_asv_tab,
                              colon_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 colon_genus_tab <- genus_data[[1]]
 colon_genus_taxa_tab <- genus_data[[2]]
@@ -8127,7 +8129,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8168,7 +8170,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8209,7 +8211,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8261,7 +8263,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8300,7 +8302,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8339,7 +8341,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8366,7 +8368,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(colon_asv_tab,
                              colon_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 colon_genus_tab <- genus_data[[1]]
 colon_genus_taxa_tab <- genus_data[[2]]
@@ -8396,7 +8398,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8436,7 +8438,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8476,7 +8478,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8527,7 +8529,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8566,7 +8568,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8606,7 +8608,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8634,7 +8636,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(colon_asv_tab,
                              colon_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 colon_genus_tab <- genus_data[[1]]
 colon_genus_taxa_tab <- genus_data[[2]]
@@ -8664,7 +8666,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8704,7 +8706,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8744,7 +8746,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8794,7 +8796,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8834,7 +8836,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8842,9 +8844,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
 roc_c <- roc_curve(enet_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["glmnet_ra"]][[model_name]] <- enet_model$model_summary
+supplements_models[["models_summ"]][["enet_model_ra"]][[model_name]] <- enet_model$model_summary
 
-supplements_models[["roc_cs"]][["glmnet_ra"]][[model_name]] <- enet_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["enet_model_ra"]][[model_name]] <- enet_model$kfold_rocobjs
 
 # see the results
 enet_model$model_summary %>% t()
@@ -8875,7 +8877,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8883,9 +8885,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
 roc_c <- roc_curve(enet_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["glmnet_ra"]][[model_name]] <- enet_model$model_summary
+supplements_models[["models_summ"]][["enet_model_ra"]][[model_name]] <- enet_model$model_summary
 
-supplements_models[["roc_cs"]][["glmnet_ra"]][[model_name]] <- enet_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["enet_model_ra"]][[model_name]] <- enet_model$kfold_rocobjs
 
 # see the results
 enet_model$model_summary %>% t()
@@ -8933,7 +8935,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8941,9 +8943,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
 roc_c <- roc_curve(enet_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["glmnet_ra"]][[model_name]] <- enet_model$model_summary
+supplements_models[["models_summ"]][["enet_model_ra"]][[model_name]] <- enet_model$model_summary
 
-supplements_models[["roc_cs"]][["glmnet_ra"]][[model_name]] <- enet_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["enet_model_ra"]][[model_name]] <- enet_model$kfold_rocobjs
 
 # see the results
 enet_model$model_summary %>% t()
@@ -8975,7 +8977,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -8983,9 +8985,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
 roc_c <- roc_curve(enet_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["glmnet_ra"]][[model_name]] <- enet_model$model_summary
+supplements_models[["models_summ"]][["enet_model_ra"]][[model_name]] <- enet_model$model_summary
 
-supplements_models[["roc_cs"]][["glmnet_ra"]][[model_name]] <- enet_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["enet_model_ra"]][[model_name]] <- enet_model$kfold_rocobjs
 
 # see the results
 enet_model$model_summary %>% t()
@@ -9016,7 +9018,7 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9024,9 +9026,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
 roc_c <- roc_curve(enet_model, group)
 
 # save the results
-supplements_models[["models_summ"]][["glmnet_ra"]][[model_name]] <- enet_model$model_summary
+supplements_models[["models_summ"]][["enet_model_ra"]][[model_name]] <- enet_model$model_summary
 
-supplements_models[["roc_cs"]][["glmnet_ra"]][[model_name]] <- enet_model$kfold_rocobjs
+supplements_models[["roc_cs"]][["enet_model_ra"]][[model_name]] <- enet_model$kfold_rocobjs
 
 # see the results
 enet_model$model_summary %>% t()
@@ -9064,7 +9066,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9104,7 +9106,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9144,7 +9146,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9202,7 +9204,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9243,7 +9245,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9284,7 +9286,7 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9332,7 +9334,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9372,7 +9374,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9413,7 +9415,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9442,7 +9444,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(colon_asv_tab,
                              colon_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 colon_genus_tab <- genus_data[[1]]
 colon_genus_taxa_tab <- genus_data[[2]]
@@ -9472,7 +9474,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9514,7 +9516,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9556,7 +9558,7 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9605,7 +9607,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9645,7 +9647,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9685,7 +9687,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9713,7 +9715,7 @@ Aggregate taxa
 ```{r}
 genus_data <- aggregate_taxa(colon_asv_tab,
                              colon_taxa_tab,
-                             taxonomic_level = "Genus")
+                             taxonomic_level = level)
 
 colon_genus_tab <- genus_data[[1]]
 colon_genus_taxa_tab <- genus_data[[2]]
@@ -9743,7 +9745,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9784,7 +9786,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9825,7 +9827,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9903,9 +9905,12 @@ knitr::kable(supplements_beta[!grepl("PCoA",names(supplements_beta))],
 
 PCA
 
-```{r, fig.width=8, fig.height=7, fig.fullwidth=TRUE, eval=FALSE}
-ggarrange(plotlist = supplements_beta[grepl("PCoA",names(supplements_beta))],
-          labels=names(supplements_beta[grepl("PCoA",names(supplements_beta))]),
+```{r, fig.width=8, fig.height=7, fig.fullwidth=TRUE, eval=TRUE}
+plot_list <- supplements_beta[grepl("PCoA",names(supplements_beta)) &
+                              grepl(segment,names(supplements_beta))]
+
+ggarrange(plotlist = plot_list,
+          labels=names(plot_list),
           font.label = list(size=5,face="plain"),
           ncol=2,nrow=3)
 ```
@@ -9945,27 +9950,27 @@ knitr::kable(cbind(as.data.frame(lapply(list_intersections,nrow)),
 Summary
 
 ```{r}
-knitr::kable(models_summ_df %>% dplyr::select(
+knitr::kable(models_summ_df_colon %>% dplyr::select(
 "alpha","lambda",
 "auc_optimism_corrected",
 "auc_optimism_corrected_CIL",
 "auc_optimism_corrected_CIU"),
-             digits=2,caption="Elastic net results")
+             digits=3,caption="Elastic net results")
 ```
 
 **ROC - ASV level**
 
 ```{r}
-roc_curve_all_custom(roc_cs[c(1:3)], 
+roc_curve_all_custom(roc_cs[c(7:9)], 
                      Q="Q1",
-                     model_name="enet")
+                     model_name="enet_model")
 ```
 
 **ROC - Genus level**
 
 ```{r}
-roc_curve_all_custom(roc_cs[c(4:6)],Q="Q1",
-                     model_name="enet")
+roc_curve_all_custom(roc_cs[c(10:12)],Q="Q1",
+                     model_name="enet_model")
 ```
 
 **Supplementary models**
@@ -9974,7 +9979,7 @@ Summary
 
 ```{r}
 # Build final dataframe
-models_list[["enet_model"]] <- models_summ_df
+models_list[["enet_model"]] <- rbind(models_summ_df_ileum,models_summ_df_colon)
 final_df <- tibble(row_names = rownames(models_list[[1]]))
 
 # Loop through models and extract required values
@@ -9990,6 +9995,7 @@ for (model_name in names(models_list)) {
 }
 
 knitr::kable(final_df, caption="All models")
+write.csv(final_df,file=file.path(path,"AUC_all_models.csv"),row.names = FALSE)
 ```
 
 ROC - ASV

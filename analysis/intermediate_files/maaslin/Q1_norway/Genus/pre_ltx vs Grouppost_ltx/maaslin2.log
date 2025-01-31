@@ -1,0 +1,249 @@
+2025-01-31 13:30:49.003183 INFO::Writing function arguments to log file
+2025-01-31 13:30:49.006615 DEBUG::Function arguments
+2025-01-31 13:30:49.007827 DEBUG::Output folder: ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx
+2025-01-31 13:30:49.009003 DEBUG::Min Abundance: 0.000000
+2025-01-31 13:30:49.010158 DEBUG::Min Prevalence: 0.000000
+2025-01-31 13:30:49.011304 DEBUG::Normalization: TSS
+2025-01-31 13:30:49.01243 DEBUG::Transform: LOG
+2025-01-31 13:30:49.013555 DEBUG::Analysis method: LM
+2025-01-31 13:30:49.014657 DEBUG::Max significance: 0.050000
+2025-01-31 13:30:49.015846 DEBUG::Random effects: Patient
+2025-01-31 13:30:49.016964 DEBUG::Fixed effects: Group
+2025-01-31 13:30:49.018156 DEBUG::Correction method: BH
+2025-01-31 13:30:49.021603 DEBUG::Standardize: TRUE
+2025-01-31 13:30:49.023129 DEBUG::Cores: 1
+2025-01-31 13:30:49.024454 INFO::Verifying options selected are valid
+2025-01-31 13:30:49.027659 INFO::Determining format of input files
+2025-01-31 13:30:49.030639 INFO::Input format is data samples as columns and metadata samples as rows
+2025-01-31 13:30:49.037462 DEBUG::Transformed data so samples are rows
+2025-01-31 13:30:49.040089 DEBUG::A total of 251 samples were found in both the data and metadata
+2025-01-31 13:30:49.041194 DEBUG::Reordering data/metadata to use same sample ordering
+2025-01-31 13:30:49.044485 INFO::Formula for random effects: expr ~ (1 | Patient)
+2025-01-31 13:30:49.04732 INFO::Formula for fixed effects: expr ~  Group
+2025-01-31 13:30:49.050028 INFO::Factor detected for categorial metadata 'Group'. Provide a reference argument or manually set factor ordering to change reference level.
+2025-01-31 13:30:49.052589 INFO::Filter data based on min abundance and min prevalence
+2025-01-31 13:30:49.055149 INFO::Total samples in data: 251
+2025-01-31 13:30:49.057659 INFO::Min samples required with min abundance for a feature not to be filtered: 0.000000
+2025-01-31 13:30:49.063675 INFO::Total filtered features: 0
+2025-01-31 13:30:49.066475 INFO::Filtered feature names from abundance and prevalence filtering:
+2025-01-31 13:30:49.075814 INFO::Total filtered features with variance filtering: 0
+2025-01-31 13:30:49.078509 INFO::Filtered feature names from variance filtering:
+2025-01-31 13:30:49.081183 INFO::Running selected normalization method: TSS
+2025-01-31 13:30:49.090754 INFO::Applying z-score to standardize continuous metadata
+2025-01-31 13:30:49.09852 INFO::Running selected transform method: LOG
+2025-01-31 13:30:49.114108 INFO::Running selected analysis method: LM
+2025-01-31 13:30:49.120241 INFO::Fitting model to feature number 1, Actinomyces
+2025-01-31 13:30:49.190023 INFO::Fitting model to feature number 2, Bifidobacterium
+2025-01-31 13:30:49.264915 INFO::Fitting model to feature number 3, Corynebacterium
+2025-01-31 13:30:49.332374 INFO::Fitting model to feature number 4, Rothia
+2025-01-31 13:30:49.405581 INFO::Fitting model to feature number 5, Atopobium
+2025-01-31 13:30:49.489044 INFO::Fitting model to feature number 6, Libanicoccus
+2025-01-31 13:30:49.572605 INFO::Fitting model to feature number 7, Olsenella
+2025-01-31 13:30:49.666812 INFO::Fitting model to feature number 8, Collinsella
+2025-01-31 13:30:49.740526 INFO::Fitting model to feature number 9, f__Coriobacteriales_Incertae_Sedis.g__uncultured
+2025-01-31 13:30:49.80778 INFO::Fitting model to feature number 10, Adlercreutzia
+2025-01-31 13:30:49.880977 INFO::Fitting model to feature number 11, Eggerthella
+2025-01-31 13:30:49.947956 INFO::Fitting model to feature number 12, Enterorhabdus
+2025-01-31 13:30:50.069333 INFO::Fitting model to feature number 13, Gordonibacter
+2025-01-31 13:30:50.141455 INFO::Fitting model to feature number 14, Senegalimassilia
+2025-01-31 13:30:50.229563 INFO::Fitting model to feature number 15, Slackia
+2025-01-31 13:30:50.305602 INFO::Fitting model to feature number 16, f__Eggerthellaceae.g__uncultured
+2025-01-31 13:30:50.389268 INFO::Fitting model to feature number 17, Bacteroides
+2025-01-31 13:30:50.470315 INFO::Fitting model to feature number 18, Barnesiella
+2025-01-31 13:30:50.549717 INFO::Fitting model to feature number 19, Coprobacter
+2025-01-31 13:30:50.638982 INFO::Fitting model to feature number 20, Butyricimonas
+2025-01-31 13:30:50.729991 INFO::Fitting model to feature number 21, Odoribacter
+2025-01-31 13:30:50.799262 INFO::Fitting model to feature number 22, Paraprevotella
+2025-01-31 13:30:50.879013 INFO::Fitting model to feature number 23, Prevotella_7
+2025-01-31 13:30:50.946329 INFO::Fitting model to feature number 24, Prevotella_9
+2025-01-31 13:30:51.016782 INFO::Fitting model to feature number 25, Alistipes
+2025-01-31 13:30:51.084829 INFO::Fitting model to feature number 26, Parabacteroides
+2025-01-31 13:30:51.156217 INFO::Fitting model to feature number 27, Campylobacter
+2025-01-31 13:30:51.233031 INFO::Fitting model to feature number 28, Gastranaerophilales
+2025-01-31 13:30:51.305972 INFO::Fitting model to feature number 29, Bilophila
+2025-01-31 13:30:51.374997 INFO::Fitting model to feature number 30, Desulfovibrio
+2025-01-31 13:30:51.448767 INFO::Fitting model to feature number 31, f__Desulfovibrionaceae.g__uncultured
+2025-01-31 13:30:51.518851 INFO::Fitting model to feature number 32, Catenibacterium
+2025-01-31 13:30:51.588768 INFO::Fitting model to feature number 33, Erysipelatoclostridium
+2025-01-31 13:30:51.654665 INFO::Fitting model to feature number 34, Erysipelotrichaceae_UCG.003
+2025-01-31 13:30:51.746558 INFO::Fitting model to feature number 35, Faecalicoccus
+2025-01-31 13:30:51.818701 INFO::Fitting model to feature number 36, Faecalitalea
+2025-01-31 13:30:51.889945 INFO::Fitting model to feature number 37, Holdemanella
+2025-01-31 13:30:51.956685 INFO::Fitting model to feature number 38, Holdemania
+2025-01-31 13:30:52.163188 INFO::Fitting model to feature number 39, Merdibacter
+2025-01-31 13:30:52.248233 INFO::Fitting model to feature number 40, Turicibacter
+2025-01-31 13:30:52.33718 INFO::Fitting model to feature number 41, X.Clostridium._innocuum_group
+2025-01-31 13:30:52.417506 INFO::Fitting model to feature number 42, f__Erysipelotrichaceae.g__unassigned
+2025-01-31 13:30:52.495568 INFO::Fitting model to feature number 43, Enterococcus
+2025-01-31 13:30:52.568178 INFO::Fitting model to feature number 44, Lactobacillus
+2025-01-31 13:30:52.647204 INFO::Fitting model to feature number 45, Ligilactobacillus
+2025-01-31 13:30:52.732874 INFO::Fitting model to feature number 46, Lactococcus
+2025-01-31 13:30:52.819724 INFO::Fitting model to feature number 47, Streptococcus
+2025-01-31 13:30:52.887553 INFO::Fitting model to feature number 48, o__Lactobacillales.f__unassigned.g__unassigned
+2025-01-31 13:30:52.957998 INFO::Fitting model to feature number 49, RF39
+2025-01-31 13:30:53.02581 INFO::Fitting model to feature number 50, Gemella
+2025-01-31 13:30:53.095338 INFO::Fitting model to feature number 51, Staphylococcus
+2025-01-31 13:30:53.171448 INFO::Fitting model to feature number 52, Christensenellaceae_R.7_group
+2025-01-31 13:30:53.252011 INFO::Fitting model to feature number 53, Clostridia_UCG.014
+2025-01-31 13:30:53.322705 INFO::Fitting model to feature number 54, Clostridia_vadinBB60_group
+2025-01-31 13:30:53.395118 INFO::Fitting model to feature number 55, Clostridium_sensu_stricto_1
+2025-01-31 13:30:53.467071 INFO::Fitting model to feature number 56, Agathobacter
+2025-01-31 13:30:53.544337 INFO::Fitting model to feature number 57, Anaerostipes
+2025-01-31 13:30:53.611754 INFO::Fitting model to feature number 58, Blautia
+2025-01-31 13:30:53.681605 INFO::Fitting model to feature number 59, CAG.56
+2025-01-31 13:30:53.750392 INFO::Fitting model to feature number 60, Coprococcus
+2025-01-31 13:30:53.840156 INFO::Fitting model to feature number 61, Dorea
+2025-01-31 13:30:53.919478 INFO::Fitting model to feature number 62, Eisenbergiella
+2025-01-31 13:30:53.991142 INFO::Fitting model to feature number 63, Frisingicoccus
+2025-01-31 13:30:54.0608 INFO::Fitting model to feature number 64, Fusicatenibacter
+2025-01-31 13:30:54.132121 INFO::Fitting model to feature number 65, GCA.900066575
+2025-01-31 13:30:54.253631 INFO::Fitting model to feature number 66, Howardella
+2025-01-31 13:30:54.335617 INFO::Fitting model to feature number 67, Hungatella
+2025-01-31 13:30:54.42332 INFO::Fitting model to feature number 68, Lachnoclostridium
+2025-01-31 13:30:54.524046 INFO::Fitting model to feature number 69, Lachnospira
+2025-01-31 13:30:54.607054 INFO::Fitting model to feature number 70, Lachnospiraceae_FCS020_group
+2025-01-31 13:30:54.684918 INFO::Fitting model to feature number 71, Lachnospiraceae_ND3007_group
+2025-01-31 13:30:54.76471 INFO::Fitting model to feature number 72, Lachnospiraceae_NK4A136_group
+2025-01-31 13:30:54.853064 INFO::Fitting model to feature number 73, Lachnospiraceae_UCG.004
+2025-01-31 13:30:54.925544 INFO::Fitting model to feature number 74, Lachnospiraceae_UCG.010
+2025-01-31 13:30:54.996631 INFO::Fitting model to feature number 75, Marvinbryantia
+2025-01-31 13:30:55.064398 INFO::Fitting model to feature number 76, Roseburia
+2025-01-31 13:30:55.13458 INFO::Fitting model to feature number 77, Sellimonas
+2025-01-31 13:30:55.20199 INFO::Fitting model to feature number 78, Tuzzerella
+2025-01-31 13:30:55.277733 INFO::Fitting model to feature number 79, X.Eubacterium._eligens_group
+2025-01-31 13:30:55.352081 INFO::Fitting model to feature number 80, X.Eubacterium._hallii_group
+2025-01-31 13:30:55.432034 INFO::Fitting model to feature number 81, X.Eubacterium._ventriosum_group
+2025-01-31 13:30:55.505082 INFO::Fitting model to feature number 82, X.Eubacterium._xylanophilum_group
+2025-01-31 13:30:55.576589 INFO::Fitting model to feature number 83, X.Ruminococcus._gauvreauii_group
+2025-01-31 13:30:55.643639 INFO::Fitting model to feature number 84, X.Ruminococcus._gnavus_group
+2025-01-31 13:30:55.714037 INFO::Fitting model to feature number 85, X.Ruminococcus._torques_group
+2025-01-31 13:30:55.781732 INFO::Fitting model to feature number 86, f__Lachnospiraceae.g__unassigned
+2025-01-31 13:30:55.854861 INFO::Fitting model to feature number 87, Monoglobus
+2025-01-31 13:30:55.943493 INFO::Fitting model to feature number 88, Butyricicoccus
+2025-01-31 13:30:56.019665 INFO::Fitting model to feature number 89, Colidextribacter
+2025-01-31 13:30:56.087256 INFO::Fitting model to feature number 90, Flavonifractor
+2025-01-31 13:30:56.157437 INFO::Fitting model to feature number 91, Intestinimonas
+2025-01-31 13:30:56.226937 INFO::Fitting model to feature number 92, NK4A214_group
+2025-01-31 13:30:56.360286 INFO::Fitting model to feature number 93, Oscillibacter
+2025-01-31 13:30:56.452662 INFO::Fitting model to feature number 94, Oscillospira
+2025-01-31 13:30:56.534479 INFO::Fitting model to feature number 95, UCG.002
+2025-01-31 13:30:56.604327 INFO::Fitting model to feature number 96, UCG.003
+2025-01-31 13:30:56.685403 INFO::Fitting model to feature number 97, UCG.005
+2025-01-31 13:30:56.7546 INFO::Fitting model to feature number 98, f__Oscillospiraceae.g__unassigned
+2025-01-31 13:30:56.83724 INFO::Fitting model to feature number 99, f__Oscillospiraceae.g__uncultured
+2025-01-31 13:30:56.924102 INFO::Fitting model to feature number 100, Anaerotruncus
+2025-01-31 13:30:57.001542 INFO::Fitting model to feature number 101, DTU089
+2025-01-31 13:30:57.071901 INFO::Fitting model to feature number 102, Faecalibacterium
+2025-01-31 13:30:57.142704 INFO::Fitting model to feature number 103, Fournierella
+2025-01-31 13:30:57.210316 INFO::Fitting model to feature number 104, Incertae_Sedis
+2025-01-31 13:30:57.282525 INFO::Fitting model to feature number 105, Negativibacillus
+2025-01-31 13:30:57.367686 INFO::Fitting model to feature number 106, Ruminococcus
+2025-01-31 13:30:57.440066 INFO::Fitting model to feature number 107, Subdoligranulum
+2025-01-31 13:30:57.512772 INFO::Fitting model to feature number 108, UBA1819
+2025-01-31 13:30:57.586348 INFO::Fitting model to feature number 109, X.Eubacterium._siraeum_group
+2025-01-31 13:30:57.654189 INFO::Fitting model to feature number 110, f__Ruminococcaceae.g__unassigned
+2025-01-31 13:30:57.724704 INFO::Fitting model to feature number 111, f__Ruminococcaceae.g__uncultured
+2025-01-31 13:30:57.79197 INFO::Fitting model to feature number 112, UCG.010
+2025-01-31 13:30:57.864402 INFO::Fitting model to feature number 113, X.Eubacterium._coprostanoligenes_group
+2025-01-31 13:30:57.931516 INFO::Fitting model to feature number 114, Peptococcus
+2025-01-31 13:30:58.015556 INFO::Fitting model to feature number 115, Family_XIII_AD3011_group
+2025-01-31 13:30:58.095058 INFO::Fitting model to feature number 116, Mogibacterium
+2025-01-31 13:30:58.164334 INFO::Fitting model to feature number 117, X.Eubacterium._brachy_group
+2025-01-31 13:30:58.236656 INFO::Fitting model to feature number 118, X.Eubacterium._nodatum_group
+2025-01-31 13:30:58.355384 INFO::Fitting model to feature number 119, Anaerococcus
+2025-01-31 13:30:58.442906 INFO::Fitting model to feature number 120, Finegoldia
+2025-01-31 13:30:58.528524 INFO::Fitting model to feature number 121, Peptoniphilus
+2025-01-31 13:30:58.604323 INFO::Fitting model to feature number 122, Intestinibacter
+2025-01-31 13:30:58.67434 INFO::Fitting model to feature number 123, Peptostreptococcus
+2025-01-31 13:30:58.753394 INFO::Fitting model to feature number 124, Romboutsia
+2025-01-31 13:30:58.82291 INFO::Fitting model to feature number 125, Terrisporobacter
+2025-01-31 13:30:58.901241 INFO::Fitting model to feature number 126, Acidaminococcus
+2025-01-31 13:30:58.993232 INFO::Fitting model to feature number 127, Phascolarctobacterium
+2025-01-31 13:30:59.071772 INFO::Fitting model to feature number 128, Megamonas
+2025-01-31 13:30:59.142282 INFO::Fitting model to feature number 129, Allisonella
+2025-01-31 13:30:59.215849 INFO::Fitting model to feature number 130, Dialister
+2025-01-31 13:30:59.285899 INFO::Fitting model to feature number 131, Megasphaera
+2025-01-31 13:30:59.356919 INFO::Fitting model to feature number 132, Veillonella
+2025-01-31 13:30:59.435269 INFO::Fitting model to feature number 133, Veillonellaceae
+2025-01-31 13:30:59.523153 INFO::Fitting model to feature number 134, Fusobacterium
+2025-01-31 13:30:59.611524 INFO::Fitting model to feature number 135, TM7x
+2025-01-31 13:30:59.682299 INFO::Fitting model to feature number 136, f__Xanthobacteraceae.g__unassigned
+2025-01-31 13:30:59.751922 INFO::Fitting model to feature number 137, o__Rhodospirillales.f__uncultured.g__uncultured
+2025-01-31 13:30:59.820068 INFO::Fitting model to feature number 138, Sphingobium
+2025-01-31 13:30:59.891463 INFO::Fitting model to feature number 139, Neisseria
+2025-01-31 13:30:59.958531 INFO::Fitting model to feature number 140, Parasutterella
+2025-01-31 13:31:00.036413 INFO::Fitting model to feature number 141, Sutterella
+2025-01-31 13:31:00.131807 INFO::Fitting model to feature number 142, Escherichia.Shigella
+2025-01-31 13:31:00.204248 INFO::Fitting model to feature number 143, Klebsiella
+2025-01-31 13:31:00.270831 INFO::Fitting model to feature number 144, f__Enterobacteriaceae.g__unassigned
+2025-01-31 13:31:00.345498 INFO::Fitting model to feature number 145, Actinobacillus
+2025-01-31 13:31:00.474058 INFO::Fitting model to feature number 146, Aggregatibacter
+2025-01-31 13:31:00.553356 INFO::Fitting model to feature number 147, Haemophilus
+2025-01-31 13:31:00.641269 INFO::Fitting model to feature number 148, Pseudomonas
+2025-01-31 13:31:00.715943 INFO::Fitting model to feature number 149, Akkermansia
+2025-01-31 13:31:00.795383 INFO::Fitting model to feature number 150, Alloscardovia
+2025-01-31 13:31:00.866939 INFO::Fitting model to feature number 151, f__Barnesiellaceae.g__uncultured
+2025-01-31 13:31:00.937294 INFO::Fitting model to feature number 152, Dysgonomonas
+2025-01-31 13:31:01.026972 INFO::Fitting model to feature number 153, Muribaculaceae
+2025-01-31 13:31:01.118498 INFO::Fitting model to feature number 154, Porphyromonas
+2025-01-31 13:31:01.191765 INFO::Fitting model to feature number 155, Alloprevotella
+2025-01-31 13:31:01.259719 INFO::Fitting model to feature number 156, Abiotrophia
+2025-01-31 13:31:01.342029 INFO::Fitting model to feature number 157, Lacticaseibacillus
+2025-01-31 13:31:01.425095 INFO::Fitting model to feature number 158, Leuconostoc
+2025-01-31 13:31:01.51758 INFO::Fitting model to feature number 159, Limosilactobacillus
+2025-01-31 13:31:01.61897 INFO::Fitting model to feature number 160, f__Lactobacillaceae.g__unassigned
+2025-01-31 13:31:01.711194 INFO::Fitting model to feature number 161, f__Christensenellaceae.g__unassigned
+2025-01-31 13:31:01.781151 INFO::Fitting model to feature number 162, Anaerofustis
+2025-01-31 13:31:01.850813 INFO::Fitting model to feature number 163, Lachnospiraceae_UCG.001
+2025-01-31 13:31:01.920482 INFO::Fitting model to feature number 164, Lachnospiraceae_UCG.003
+2025-01-31 13:31:01.99461 INFO::Fitting model to feature number 165, Lactonifactor
+2025-01-31 13:31:02.066832 INFO::Fitting model to feature number 166, Oribacterium
+2025-01-31 13:31:02.138176 INFO::Fitting model to feature number 167, Robinsoniella
+2025-01-31 13:31:02.227599 INFO::Fitting model to feature number 168, X.Eubacterium._fissicatena_group
+2025-01-31 13:31:02.298734 INFO::Fitting model to feature number 169, X.Eubacterium._ruminantium_group
+2025-01-31 13:31:02.373522 INFO::Fitting model to feature number 170, Pseudoflavonifractor
+2025-01-31 13:31:02.472122 INFO::Fitting model to feature number 171, CAG.352
+2025-01-31 13:31:02.556445 INFO::Fitting model to feature number 172, Candidatus_Soleaferrea
+2025-01-31 13:31:02.697284 INFO::Fitting model to feature number 173, Paludicola
+2025-01-31 13:31:02.771593 INFO::Fitting model to feature number 174, X.Clostridium._methylpentosum_group
+2025-01-31 13:31:02.852955 INFO::Fitting model to feature number 175, Family_XIII_UCG.001
+2025-01-31 13:31:02.922831 INFO::Fitting model to feature number 176, Parvimonas
+2025-01-31 13:31:03.002102 INFO::Fitting model to feature number 177, Clostridioides
+2025-01-31 13:31:03.08747 INFO::Fitting model to feature number 178, Anaeroglobus
+2025-01-31 13:31:03.181361 INFO::Fitting model to feature number 179, Citrobacter
+2025-01-31 13:31:03.251416 INFO::Fitting model to feature number 180, o__Enterobacterales.f__unassigned.g__unassigned
+2025-01-31 13:31:03.329772 INFO::Fitting model to feature number 181, Azotobacter
+2025-01-31 13:31:03.429299 INFO::Counting total values for each feature
+2025-01-31 13:31:03.443403 INFO::Writing filtered data to file ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/features/filtered_data.tsv
+2025-01-31 13:31:03.508683 INFO::Writing filtered, normalized data to file ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/features/filtered_data_norm.tsv
+2025-01-31 13:31:03.652559 INFO::Writing filtered, normalized, transformed data to file ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/features/filtered_data_norm_transformed.tsv
+2025-01-31 13:31:03.847611 WARNING::Deleting existing residuals file: ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/fits/residuals.rds
+2025-01-31 13:31:03.851421 INFO::Writing residuals to file ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/fits/residuals.rds
+2025-01-31 13:31:03.878519 WARNING::Deleting existing fitted file: ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/fits/fitted.rds
+2025-01-31 13:31:03.882121 INFO::Writing fitted values to file ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/fits/fitted.rds
+2025-01-31 13:31:03.900709 WARNING::Deleting existing ranef file: ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/fits/ranef.rds
+2025-01-31 13:31:03.904183 INFO::Writing extracted random effects to file ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/fits/ranef.rds
+2025-01-31 13:31:03.914646 INFO::Writing all results to file (ordered by increasing q-values): ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/all_results.tsv
+2025-01-31 13:31:03.923255 INFO::Writing the significant results (those which are less than or equal to the threshold of 0.050000 ) to file (ordered by increasing q-values): ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/significant_results.tsv
+2025-01-31 13:31:03.927726 INFO::Writing heatmap of significant results to file: ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx/heatmap.pdf
+2025-01-31 13:31:03.933629 INFO::Writing association plots (one for each significant association) to output folder: ../intermediate_files/maaslin/Q1_czech//genus/pre_ltx vs Grouppost_ltx
+2025-01-31 13:31:03.940171 INFO::Plotting associations from most to least significant, grouped by metadata
+2025-01-31 13:31:03.943113 INFO::Plotting data for metadata number 1, Group
+2025-01-31 13:31:03.947096 INFO::Creating boxplot for categorical data, Group vs Haemophilus
+2025-01-31 13:31:04.12968 INFO::Creating boxplot for categorical data, Group vs X.Eubacterium._fissicatena_group
+2025-01-31 13:31:04.359229 INFO::Creating boxplot for categorical data, Group vs Dorea
+2025-01-31 13:31:04.602733 INFO::Creating boxplot for categorical data, Group vs Eisenbergiella
+2025-01-31 13:31:04.819622 INFO::Creating boxplot for categorical data, Group vs Sphingobium
+2025-01-31 13:31:05.081988 INFO::Creating boxplot for categorical data, Group vs Escherichia.Shigella
+2025-01-31 13:31:05.314245 INFO::Creating boxplot for categorical data, Group vs Sutterella
+2025-01-31 13:31:05.524136 INFO::Creating boxplot for categorical data, Group vs Enterococcus
+2025-01-31 13:31:05.72067 INFO::Creating boxplot for categorical data, Group vs X.Ruminococcus._torques_group
+2025-01-31 13:31:05.913329 INFO::Creating boxplot for categorical data, Group vs Lactonifactor
+2025-01-31 13:31:06.110941 INFO::Creating boxplot for categorical data, Group vs Fusobacterium
+2025-01-31 13:31:06.304648 INFO::Creating boxplot for categorical data, Group vs Hungatella
+2025-01-31 13:31:06.524313 INFO::Creating boxplot for categorical data, Group vs Agathobacter
+2025-01-31 13:31:06.762363 INFO::Creating boxplot for categorical data, Group vs Senegalimassilia
+2025-01-31 13:31:06.994494 INFO::Creating boxplot for categorical data, Group vs Dysgonomonas
+2025-01-31 13:31:07.187084 INFO::Creating boxplot for categorical data, Group vs Incertae_Sedis
+2025-01-31 13:31:07.417682 INFO::Creating boxplot for categorical data, Group vs Finegoldia
+2025-01-31 13:31:07.610201 INFO::Creating boxplot for categorical data, Group vs Alloscardovia

@@ -1,0 +1,66 @@
+2025-01-31 13:38:12.580596 INFO::Writing function arguments to log file
+2025-01-31 13:38:12.582263 DEBUG::Function arguments
+2025-01-31 13:38:12.582817 DEBUG::Output folder: ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx
+2025-01-31 13:38:12.583301 DEBUG::Min Abundance: 0.000000
+2025-01-31 13:38:12.583787 DEBUG::Min Prevalence: 0.000000
+2025-01-31 13:38:12.584261 DEBUG::Normalization: TSS
+2025-01-31 13:38:12.584739 DEBUG::Transform: LOG
+2025-01-31 13:38:12.585187 DEBUG::Analysis method: LM
+2025-01-31 13:38:12.585648 DEBUG::Max significance: 0.050000
+2025-01-31 13:38:12.586133 DEBUG::Random effects: Patient
+2025-01-31 13:38:12.586597 DEBUG::Fixed effects: Group
+2025-01-31 13:38:12.587053 DEBUG::Correction method: BH
+2025-01-31 13:38:12.588699 DEBUG::Standardize: TRUE
+2025-01-31 13:38:12.58921 DEBUG::Cores: 1
+2025-01-31 13:38:12.589668 INFO::Verifying options selected are valid
+2025-01-31 13:38:12.591003 INFO::Determining format of input files
+2025-01-31 13:38:12.592257 INFO::Input format is data samples as columns and metadata samples as rows
+2025-01-31 13:38:12.594681 DEBUG::Transformed data so samples are rows
+2025-01-31 13:38:12.595312 DEBUG::A total of 304 samples were found in both the data and metadata
+2025-01-31 13:38:12.595792 DEBUG::Reordering data/metadata to use same sample ordering
+2025-01-31 13:38:12.596479 INFO::Formula for random effects: expr ~ (1 | Patient)
+2025-01-31 13:38:12.597815 INFO::Formula for fixed effects: expr ~  Group
+2025-01-31 13:38:12.599147 INFO::Factor detected for categorial metadata 'Group'. Provide a reference argument or manually set factor ordering to change reference level.
+2025-01-31 13:38:12.600357 INFO::Filter data based on min abundance and min prevalence
+2025-01-31 13:38:12.601581 INFO::Total samples in data: 304
+2025-01-31 13:38:12.602739 INFO::Min samples required with min abundance for a feature not to be filtered: 0.000000
+2025-01-31 13:38:12.604188 INFO::Total filtered features: 0
+2025-01-31 13:38:12.605413 INFO::Filtered feature names from abundance and prevalence filtering:
+2025-01-31 13:38:12.606919 INFO::Total filtered features with variance filtering: 0
+2025-01-31 13:38:12.608148 INFO::Filtered feature names from variance filtering:
+2025-01-31 13:38:12.609306 INFO::Running selected normalization method: TSS
+2025-01-31 13:38:12.611255 INFO::Applying z-score to standardize continuous metadata
+2025-01-31 13:38:12.615019 INFO::Running selected transform method: LOG
+2025-01-31 13:38:12.61706 INFO::Running selected analysis method: LM
+2025-01-31 13:38:12.619627 INFO::Fitting model to feature number 1, Actinobacteriota
+2025-01-31 13:38:12.65497 INFO::Fitting model to feature number 2, Bacteroidota
+2025-01-31 13:38:12.687767 INFO::Fitting model to feature number 3, Cyanobacteria
+2025-01-31 13:38:12.720456 INFO::Fitting model to feature number 4, Desulfobacterota
+2025-01-31 13:38:12.752447 INFO::Fitting model to feature number 5, Firmicutes
+2025-01-31 13:38:12.784357 INFO::Fitting model to feature number 6, Fusobacteriota
+2025-01-31 13:38:12.81602 INFO::Fitting model to feature number 7, Patescibacteria
+2025-01-31 13:38:12.852437 INFO::Fitting model to feature number 8, Proteobacteria
+2025-01-31 13:38:12.887718 INFO::Fitting model to feature number 9, Verrucomicrobiota
+2025-01-31 13:38:12.922362 INFO::Fitting model to feature number 10, Campylobacterota
+2025-01-31 13:38:12.963297 INFO::Counting total values for each feature
+2025-01-31 13:38:12.965468 INFO::Writing filtered data to file ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/features/filtered_data.tsv
+2025-01-31 13:38:12.975474 INFO::Writing filtered, normalized data to file ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/features/filtered_data_norm.tsv
+2025-01-31 13:38:12.988246 INFO::Writing filtered, normalized, transformed data to file ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/features/filtered_data_norm_transformed.tsv
+2025-01-31 13:38:13.002163 WARNING::Deleting existing residuals file: ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/fits/residuals.rds
+2025-01-31 13:38:13.005292 INFO::Writing residuals to file ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/fits/residuals.rds
+2025-01-31 13:38:13.011065 WARNING::Deleting existing fitted file: ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/fits/fitted.rds
+2025-01-31 13:38:13.014047 INFO::Writing fitted values to file ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/fits/fitted.rds
+2025-01-31 13:38:13.017782 WARNING::Deleting existing ranef file: ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/fits/ranef.rds
+2025-01-31 13:38:13.01992 INFO::Writing extracted random effects to file ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/fits/ranef.rds
+2025-01-31 13:38:13.022051 INFO::Writing all results to file (ordered by increasing q-values): ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/all_results.tsv
+2025-01-31 13:38:13.024425 INFO::Writing the significant results (those which are less than or equal to the threshold of 0.050000 ) to file (ordered by increasing q-values): ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/significant_results.tsv
+2025-01-31 13:38:13.026326 INFO::Writing heatmap of significant results to file: ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx/heatmap.pdf
+2025-01-31 13:38:13.028593 INFO::Writing association plots (one for each significant association) to output folder: ../intermediate_files/maaslin/Q1_czech/Phylum//healthy vs Grouppost_ltx
+2025-01-31 13:38:13.030465 INFO::Plotting associations from most to least significant, grouped by metadata
+2025-01-31 13:38:13.031741 INFO::Plotting data for metadata number 1, Group
+2025-01-31 13:38:13.03368 INFO::Creating boxplot for categorical data, Group vs Fusobacteriota
+2025-01-31 13:38:13.126247 INFO::Creating boxplot for categorical data, Group vs Proteobacteria
+2025-01-31 13:38:13.219701 INFO::Creating boxplot for categorical data, Group vs Bacteroidota
+2025-01-31 13:38:13.311442 INFO::Creating boxplot for categorical data, Group vs Desulfobacterota
+2025-01-31 13:38:13.428337 INFO::Creating boxplot for categorical data, Group vs Campylobacterota
+2025-01-31 13:38:13.695433 INFO::Creating boxplot for categorical data, Group vs Verrucomicrobiota

@@ -100,6 +100,11 @@ merging_data <- function(asv_tab_1, asv_tab_2,
                         taxa_tab_1,taxa_tab_2,
                         metadata_1,metadata_2,
                         segment, Q){
+  
+  if ("segment" %in% colnames(metadata_1)){
+    metadata_1 <- metadata_1 %>% dplyr::rename(Matrix=segment)
+  }
+
   # TAB 1
   if (segment=="TI") metadata_1 <- metadata_1[metadata_1$Matrix == segment,]
   else if (segment=="colon") metadata_1 <- metadata_1[metadata_1$Matrix %in% c("Cecum","Rectum","CD"),]
@@ -110,30 +115,48 @@ merging_data <- function(asv_tab_1, asv_tab_2,
   asv_tab_1 <- data_checked[[1]]
   taxa_tab_1 <- data_checked[[2]]
   
-  # TAB 2
-  if (segment=="TI") metadata_2 <- metadata_2[metadata_2$segment == segment,]
-  else if (segment=="colon")  metadata_2 <- metadata_2[metadata_2$segment %in% c("CA","CD","SI"),]
-  asv_tab_2 <- asv_tab_2[,c(TRUE,colnames(asv_tab_2)[-1] %in% metadata_2$SampleID)]
-  taxa_tab_2 <- taxa_tab_2[taxa_tab_2$SeqID %in% taxa_tab_2$SeqID,]
-  
-  data_checked <- data_check(asv_tab_2,taxa_tab_2)
-  asv_tab_2 <- data_checked[[1]]
-  taxa_tab_2 <- data_checked[[2]]
-  
-  # Merging
-  merged_asv_tab <- merge(asv_tab_1,asv_tab_2,by="SeqID",all=TRUE)
-  merged_taxa_tab <- merging_taxa_tables(taxa_tab_1,taxa_tab_2)
+  if (!is.null(asv_tab_2)){
+    # TAB 2
+    if (segment=="TI") metadata_2 <- metadata_2[metadata_2$segment == segment,]
+    else if (segment=="colon")  metadata_2 <- metadata_2[metadata_2$segment %in% c("CA","CD","SI"),]
+    asv_tab_2 <- asv_tab_2[,c(TRUE,colnames(asv_tab_2)[-1] %in% metadata_2$SampleID)]
+    taxa_tab_2 <- taxa_tab_2[taxa_tab_2$SeqID %in% taxa_tab_2$SeqID,]
+    
+    data_checked <- data_check(asv_tab_2,taxa_tab_2)
+    asv_tab_2 <- data_checked[[1]]
+    taxa_tab_2 <- data_checked[[2]]
+    
+    # Merging
+    merged_asv_tab <- merge(asv_tab_1,asv_tab_2,by="SeqID",all=TRUE)
+    merged_taxa_tab <- merging_taxa_tables(taxa_tab_1,taxa_tab_2)
+    
+    # metadata merge
+    merged_metadata <- rbind(metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country),
+                             metadata_2 %>% dplyr::select(SampleID,subjectid,Group,segment,Country) %>% dplyr::rename(Patient=subjectid,Matrix=segment) %>%
+                               mutate(Patient=paste0("NO_",Patient)))
+    row.names(merged_metadata) <- NULL
+    
+  } else {
+    # Merging
+    merged_asv_tab <- asv_tab_1
+    merged_taxa_tab <- taxa_tab_1
+    
+    # metadata merge
+    if ("Patient" %in% colnames(metadata_1)){
+      merged_metadata <- metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country)
+    } else {
+      merged_metadata <- metadata_1 %>% 
+        dplyr::select(SampleID,subjectid,Group,Matrix,Country) %>% 
+        dplyr::rename(Patient=subjectid) %>%
+        mutate(Patient=paste0("NO_",Patient))
+    }
+    row.names(merged_metadata) <- NULL
+  }
   
   # data check - deleting redundant taxa (all zeros)
   data_checked <- data_check(merged_asv_tab,merged_taxa_tab)
   merged_asv_tab <- data_checked[[1]]
   merged_taxa_tab <- data_checked[[2]]
-  
-  # metadata merge
-  merged_metadata <- rbind(metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country),
-                           metadata_2 %>% dplyr::select(SampleID,subjectid,Group,segment,Country) %>% dplyr::rename(Patient=subjectid,Matrix=segment) %>%
-                            mutate(Patient=paste0("NO_",Patient)))
-  row.names(merged_metadata) <- NULL
   
   # keep only Pre_LTx vs Post_LTx vs Healthy
   if (Q == "Q1"){
@@ -1005,20 +1028,21 @@ pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
                    "2"=c("non-rPSC","rPSC","pre_ltx","rPSC","pre_ltx","pre_ltx")) %>% t()
   
   if ("post_ltx" %in% factors) {
-    co <- data.frame("1"=c("pre_ltx","pre_ltx","post_ltx"),
-                     "2"=c("healthy","post_ltx","healthy")) %>% t()
+    co <- data.frame("1"=c("healthy","pre_ltx","healthy"),
+                     "2"=c("pre_ltx","post_ltx","post_ltx")) %>% t()
   } 
   if (!("pre_ltx" %in% factors)) {
-    co <- data.frame("1"=c("rPSC","rPSC","non-rPSC"),
-                     "2"=c("non-rPSC","healthy","healthy")) %>% t()
+    co <- data.frame("1"=c("non-rPSC","healthy","healthy"),
+                     "2"=c("rPSC","rPSC","non-rPSC")) %>% t()
   } 
   if (!FALSE %in% (c("healthy","non-rPSC","rPSC","pre_ltx") %in% factors)){
-    co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","non-rPSC","rPSC"),
-                     "2"=c("non-rPSC","rPSC","pre_ltx","rPSC","pre_ltx","pre_ltx")) %>% t()
+    co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","pre_ltx","pre_ltx"),
+                     "2"=c("non-rPSC","rPSC","pre_ltx","rPSC","non-rPSC","rPSC")) %>% t()
   }
   models <- c()
   names <- c()
   emeans_models <- c()
+  means <- c()
   for(elem in 1:ncol(co)){
     x_sub <- data[factors %in% c(co[1,elem],co[2,elem]),]
     x_sub$Group <- factor(x_sub$Group)
@@ -1026,14 +1050,20 @@ pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
     group <- paste(co[1,elem],"vs",co[2,elem])
     model <- coef(summary(lm(as.formula(formula), data = x_sub)))
     model <- glm_renaming(model,c(co[1,elem],co[2,elem]))
-    if (model[4,"Pr(>|t|)"]<0.05){
-      model_raw <- lm(as.formula(formula), data = x_sub)
-      emeans_model <- as.data.frame(emmeans(model_raw, pairwise ~ Group | Country)$contrasts)
-      emeans_models <- rbind(emeans_models,emeans_model)
+    mean_group <- model[1,]
+    if (nrow(model)>2){
+      if (model[4,"Pr(>|t|)"]<0.05){
+        model_raw <- lm(as.formula(formula), data = x_sub)
+        emeans_model <- as.data.frame(emmeans(model_raw, pairwise ~ Group | Country)$contrasts)
+        emeans_models <- rbind(emeans_models,emeans_model)
+      } 
     }
     names <- c(names,rownames(model))
     models <- rbind(models,model)
+    means <- rbind(mean_group,means)
   }
+  
+  rownames(means) <- co[1,]
   models <- models[-grep("^[(].+[)]$", names),]
   models %<>% as.data.frame() %>% `row.names<-`(names[-grep("^[(].+[)]$", names)])
   p.adjusted <- p.adjust(models[,"Pr(>|t|)"],method=p.adjust.m)
@@ -1046,7 +1076,7 @@ pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
   
   df <- data.frame(models,
                    sig=sig)
-  return(list(df,emeans_models))
+  return(list(df,emeans_models, means))
   
 }
 
@@ -1056,21 +1086,23 @@ pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
   #co <- combn(unique(as.character(factors)),2)
   co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","non-rPSC","rPSC"),
                    "2"=c("non-rPSC","rPSC","pre_ltx","rPSC","pre_ltx","pre_ltx")) %>% t()
+  
   if ("post_ltx" %in% factors) {
-    co <- data.frame("1"=c("pre_ltx","pre_ltx","post_ltx"),
-                     "2"=c("healthy","post_ltx","healthy")) %>% t()
+    co <- data.frame("1"=c("healthy","pre_ltx","healthy"),
+                     "2"=c("pre_ltx","post_ltx","post_ltx")) %>% t()
   } 
   if (!("pre_ltx" %in% factors)) {
-    co <- data.frame("1"=c("rPSC","rPSC","non-rPSC"),
-                     "2"=c("non-rPSC","healthy","healthy")) %>% t()
+    co <- data.frame("1"=c("non-rPSC","healthy","healthy"),
+                     "2"=c("rPSC","rPSC","non-rPSC")) %>% t()
   } 
   if (!FALSE %in% (c("healthy","non-rPSC","rPSC","pre_ltx") %in% factors)){
-    co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","non-rPSC","rPSC"),
-                     "2"=c("non-rPSC","rPSC","pre_ltx","rPSC","pre_ltx","pre_ltx")) %>% t()
+    co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","pre_ltx","pre_ltx"),
+                     "2"=c("non-rPSC","rPSC","pre_ltx","rPSC","non-rPSC","rPSC")) %>% t()
   }
   models <- c()
   names <- c()
   result_lists <- c()
+  means <- c()
   for(elem in 1:ncol(co)){
     x_sub <- data[factors %in% c(co[1,elem],co[2,elem]),]
     x_sub$Group <- factor(x_sub$Group)
@@ -1078,7 +1110,9 @@ pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
     group <- paste(co[1,elem],"vs",co[2,elem])
     model <- coef(summary(lmer(as.formula(formula), data = x_sub)))
     model <- lmer_renaming(model,c(co[1,elem],co[2,elem]))
-    if (model[4,"Pr(>|t|)"]<0.05){
+    mean_group <- model[1,]
+    if (nrow(model)>2){
+      if (model[4,"Pr(>|t|)"]<0.05){
       # CZ
       group1_group2_cz <- as.data.frame(coef(summary(lmer(as.formula(gsub(" \\* Country","",formula)), data = subset(x_sub,Country=="CZ")))))
       
@@ -1117,10 +1151,13 @@ pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
         paste(co[2,elem],"CZ_vs_NO",sep = "_")
       )
       result_lists[[length(result_lists)+1]] <- result_list
+      }
     }
     names <- c(names,rownames(model))
     models <- rbind(models,model)
+    means <- rbind(mean_group,means)
   }
+  rownames(means) <- co[1,]
   models <- models[-grep("^[(].+[)]$", names),]
   models %<>% as.data.frame() %>% `row.names<-`(names[-grep("^[(].+[)]$", names)])
   p.adjusted <- p.adjust(models[,"Pr(>|t|)"],method=p.adjust.m)
@@ -1133,7 +1170,7 @@ pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
   
   df <- data.frame(models,
                    sig=sig)
-  return(list(df,result_lists))
+  return(list(df,result_lists,means))
   
 }
 
