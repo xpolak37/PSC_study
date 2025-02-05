@@ -255,7 +255,8 @@ alpha_data <- data.frame(SampleID=ileum_mpse$Sample.x,
                          Simpson=ileum_mpse$Simpson,
                          Pielou=ileum_mpse$Pielou,
                          Group=ileum_mpse$Group,
-                         Country=ileum_mpse$Country)
+                         Country=ileum_mpse$Country,
+                         Patient=ileum_mpse$Patient)
 
 write.csv(alpha_data,file.path(path,paste0("alpha_indices_",segment,".csv")),
           row.names = FALSE)
@@ -2712,7 +2713,7 @@ saveWorkbook(supplements_wb,file.path(path,paste0("supplements_uni_analysis_wb_"
 
 # PSC effect
 write.xlsx(psc_effect,
-          file.path(path,paste0("supplements_psc_effect_",segment,".csv")))
+          file.path(path,paste0("supplements_psc_effect_",segment,".xlsx")))
 
 # SIGNIFICANT taxa
 write.xlsx(list_intersections[grepl(segment,names(list_intersections))] %>%
@@ -7641,6 +7642,23 @@ psc_effect[[paste(segment,level)]] <- list_intersections[[paste(segment,level, "
   
 # see the results
 psc_effect[[paste(segment,level)]] 
+```
+
+#### Saving results
+
+```{r}
+# ALL DATA
+saveWorkbook(supplements_wb,file.path(path,paste0("supplements_uni_analysis_wb_",segment,".xlsx")),overwrite = TRUE)
+
+# PSC effect
+write.xlsx(psc_effect,
+          file.path(path,paste0("supplements_psc_effect_",segment,".xlsx")))
+
+# SIGNIFICANT taxa
+write.xlsx(list_intersections[grepl(segment,names(list_intersections))] %>%
+            `names<-`(gsub(segment, "", names(
+              list_intersections[grepl(segment,names(list_intersections))]))),
+           file.path(path,paste0("supplements_significant_taxa_",segment,".xlsx")))
 ```
 
 ## Machine learning

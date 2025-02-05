@@ -1,0 +1,1008 @@
+---
+title: "DYSBIOSIS INDEX CALCULATION"
+output: html_notebook
+---
+
+DYSBIOSIS INDEX
+INDICES ANALYSIS:
+A) NANCY, eMAYO, MAYO DAI - gut problems
+B) MAYO PSC, APRI, FIB, AOM - live problems
+
+# DYSBIOSIS INDEX
+
+```{r}
+source("custom_functions.R")
+library(tidyr)
+library(picante)
+```
+
+# Data Import
+
+Importing ASV, taxa and metadata tables for both Czech and Norway
+samples.
+
+**Czech**
+
+```{r}
+path = "../../data/analysis_ready_data/ikem/"
+asv_tab_ikem <- as.data.frame(fread(file.path(path,"asv_table_ikem.csv"),
+                                    check.names = FALSE))
+taxa_tab_ikem <- as.data.frame(fread(file.path(path,"taxa_table_ikem.csv"),
+                                     check.names = FALSE))
+metadata_ikem <- as.data.frame(fread(file.path(path,"metadata_ikem.csv"),
+                                     check.names = FALSE))
+```
+
+**Norway**
+
+```{r}
+path = "../../data/analysis_ready_data/norway/"
+asv_tab_norway <- as.data.frame(fread(file.path(path,"asv_table_norway.csv"),
+                                    check.names = FALSE))
+taxa_tab_norway <- as.data.frame(fread(file.path(path,"taxa_table_norway.csv"),
+                                    check.names = FALSE))
+metadata_norway <- as.data.frame(fread(file.path(path,"metadata_norway.csv"),
+                                    check.names = FALSE))
+```
+
+# Merging
+
+**TO DO: STATISTICS OF READS**
+
+Merging two countries based on the different matrices - Ileum, Colon.
+
+**Terminal ileum**
+
+```{r}
+ileum_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=asv_tab_norway,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=taxa_tab_norway,
+                           metadata_1=metadata_ikem,
+                           metadata_2=metadata_norway,
+                           segment="TI",Q="clinical")
+
+ileum_asv_tab <- ileum_data[[1]]
+ileum_taxa_tab <- ileum_data[[2]]
+ileum_metadata <- ileum_data[[3]]
+```
+
+**Colon**
+
+```{r}
+colon_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=asv_tab_norway,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=taxa_tab_norway,
+                           metadata_1=metadata_ikem,
+                           metadata_2=metadata_norway,
+                           segment="colon",Q="clinical")
+
+colon_asv_tab <- colon_data[[1]]
+colon_taxa_tab <- colon_data[[2]]
+colon_metadata <- colon_data[[3]]
+```
+
+# Data Analysis - Terminal ileum
+
+```{r}
+segment="terminal_ileum"
+```
+
+## Filtering
+
+Rules: - prevalence \> 5% (per group) - nearZeroVar with default
+settings - sequencing depth \> 5000 - taxonomic assignment at least
+order
+
+**Library size**
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(ileum_asv_tab, line = c(5000,10000))
+```
+
+### Sequencing depth
+
+```{r}
+data_filt <- seq_depth_filtering(ileum_asv_tab,
+                                 ileum_taxa_tab,
+                                 ileum_metadata,
+                                 seq_depth_threshold = 10000)
+
+filt_ileum_asv_tab <- data_filt[[1]]; alpha_ileum_asv_tab <- filt_ileum_asv_tab
+filt_ileum_taxa_tab <- data_filt[[2]]; alpha_ileum_taxa_tab <- filt_ileum_taxa_tab
+filt_ileum_metadata <- data_filt[[3]]; alpha_ileum_metadata <- filt_ileum_metadata
+
+seq_step <- dim(filt_ileum_asv_tab)[1]
+```
+
+**Library size**
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_ileum_asv_tab,line = c(5000,10000))
+```
+
+### NearZeroVar
+
+```{r}
+data_filt <- nearzerovar_filtering(filt_ileum_asv_tab, 
+                                   filt_ileum_taxa_tab,
+                                   filt_ileum_metadata)
+
+filt_ileum_asv_tab <- data_filt[[1]]
+filt_ileum_taxa_tab <- data_filt[[2]]
+nearzero_step <- dim(filt_ileum_asv_tab)[1]
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_ileum_asv_tab,line = c(5000,10000))
+```
+
+### Final Counts
+
+```{r}
+final_counts_filtering(ileum_asv_tab,
+                       filt_ileum_asv_tab,
+                       filt_ileum_metadata,
+                       seq_step, 0, nearzero_step) %>% `colnames<-`("Count")
+```
+
+## Important taxa
+
+#### ASV level
+
+```{r}
+psc_asv <- read.xlsx("../results/Q1/univariate_analysis/supplements_psc_effect_terminal_ileum.xlsx",
+                     sheet = "terminal_ileum ASV")
+psc_increased_asv <- psc_asv$SeqID[psc_asv$log2FoldChange>0]
+psc_decreased_asv <- psc_asv$SeqID[psc_asv$log2FoldChange<0]
+```
+
+#### Genus level
+
+```{r}
+psc_genus <- read.xlsx("../results/Q1/univariate_analysis/supplements_psc_effect_terminal_ileum.xlsx",
+                     sheet = "terminal_ileum genus")
+psc_increased_genus <- psc_genus$SeqID[psc_genus$log2FoldChange>0]
+psc_decreased_genus <- psc_genus$SeqID[psc_genus$log2FoldChange<0]
+```
+
+
+## Relative abundances
+
+### dys_unfiltered
+
+#### ASV level 
+
+**dys_unfiltered_asv**
+
+Calculation
+
+```{r}
+dys_unfiltered_asv <- dysbiosis_index_calculation(ileum_asv_tab,
+                                                    ileum_metadata,
+                                                    psc_increased_asv,
+                                                    psc_decreased_asv,
+                                                    "dys_unfiltered_asv")
+```
+
+#### Genus level
+
+**dys_unfiltered_genus**
+
+Aggregation
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,ileum_taxa_tab,
+                             taxonomic_level="Genus",names=TRUE)
+
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa <- genus_data[[2]]
+```
+
+Calculation
+
+```{r}
+dys_unfiltered_genus <- dysbiosis_index_calculation(ileum_genus_tab,
+                                                    ileum_metadata,
+                                                    psc_increased_genus,
+                                                    psc_decreased_genus,
+                                                    "dys_unfiltered_genus")
+```
+
+### dys_filtered
+
+#### ASV level 
+
+**dys_filtered_asv**
+
+Calculation
+
+```{r}
+dys_filtered_asv <- dysbiosis_index_calculation(filt_ileum_asv_tab,
+                                                filt_ileum_metadata,
+                                                    psc_increased_asv,
+                                                    psc_decreased_asv,
+                                                    "dys_filtered_asv")
+```
+
+#### Genus level
+
+**dys_filtered_genus**
+
+Aggregation
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,ileum_taxa_tab,
+                             taxonomic_level="Genus",names=TRUE)
+
+filt_data <- filtering_steps(genus_data[[1]],genus_data[[2]],ileum_metadata,
+                            seq_depth_threshold=10000)
+
+filt_ileum_genus_tab <- filt_data[[1]]
+filt_ileum_genus_taxa <- filt_data[[2]]
+filt_ileum_metadata <- filt_data[[3]]
+```
+
+Calculation
+
+```{r}
+dys_filtered_genus <- dysbiosis_index_calculation(ileum_genus_tab,
+                                                    ileum_metadata,
+                                                    psc_increased_genus,
+                                                    psc_decreased_genus,
+                                                    "dys_filtered_genus")
+```
+
+#### ALL IN ONE
+
+```{r}
+dysbiosis_data <- dys_unfiltered_asv %>% full_join(dys_unfiltered_genus, by=c("SampleID","PatientID"))
+dysbiosis_data <- dysbiosis_data %>% full_join(dys_filtered_asv, by=c("SampleID","PatientID"))
+dysbiosis_data <- dysbiosis_data %>% full_join(dys_filtered_genus, by=c("SampleID","PatientID"))
+```
+
+```{r}
+dysbiosis_without_na <- drop_na(dysbiosis_data)
+
+dysbiosis_corr <- cor.table(dysbiosis_without_na[,3:6], cor.method="spearman")[[1]]
+dysbiosis_corr
+```
+
+```{r, fig.width=5, fig.height=5, fig.fullwidth=TRUE}
+pairs(dysbiosis_without_na[,3:6])
+```
+
+```{r}
+ileum_metadata_final <- ileum_metadata %>% full_join(dysbiosis_data, by=c("SampleID"))
+```
+
+```{r}
+ileum_metadata_final_melted <- melt(ileum_metadata_final)
+p <- ggplot(ileum_metadata_final_melted) + 
+  geom_boxplot(aes(x=Group, y=value),outliers = FALSE) + 
+    geom_jitter(width = 0.2,height = 0,aes(x=Group, y=value, color=Group),size=2) +
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  theme_bw() + 
+  scale_fill_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
+scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000"))
+p    
+```
+
+## CLR
+
+### dys_unfiltered
+
+#### ASV level 
+
+**dys_unfiltered_asv**
+
+Calculation
+
+```{r}
+dys_unfiltered_asv <- dysbiosis_index_calculation_clr(ileum_asv_tab,
+                                                    ileum_metadata,
+                                                    psc_increased_asv,
+                                                    psc_decreased_asv,
+                                                    "dys_unfiltered_asv")
+```
+
+#### Genus level
+
+**dys_unfiltered_genus**
+
+Aggregation
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,ileum_taxa_tab,
+                             taxonomic_level="Genus",names=TRUE)
+
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa <- genus_data[[2]]
+```
+
+Calculation
+
+```{r}
+dys_unfiltered_genus <- dysbiosis_index_calculation_clr(ileum_genus_tab,
+                                                    ileum_metadata,
+                                                    psc_increased_genus,
+                                                    psc_decreased_genus,
+                                                    "dys_unfiltered_genus")
+```
+
+### dys_filtered
+
+#### ASV level 
+
+**dys_filtered_asv**
+
+Calculation
+
+```{r}
+dys_filtered_asv <- dysbiosis_index_calculation_clr(filt_ileum_asv_tab,
+                                                filt_ileum_metadata,
+                                                    psc_increased_asv,
+                                                    psc_decreased_asv,
+                                                    "dys_filtered_asv")
+```
+
+#### Genus level
+
+**dys_filtered_genus**
+
+Aggregation
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,ileum_taxa_tab,
+                             taxonomic_level="Genus",names=TRUE)
+
+filt_data <- filtering_steps(genus_data[[1]],genus_data[[2]],ileum_metadata,
+                            seq_depth_threshold=10000)
+
+filt_ileum_genus_tab <- filt_data[[1]]
+filt_ileum_genus_taxa <- filt_data[[2]]
+filt_ileum_metadata <- filt_data[[3]]
+```
+
+Calculation
+
+```{r}
+dys_filtered_genus <- dysbiosis_index_calculation_clr(filt_ileum_genus_tab,
+                                                    filt_ileum_metadata,
+                                                    psc_increased_genus,
+                                                    psc_decreased_genus,
+                                                    "dys_filtered_genus")
+```
+
+### ALL IN ONE
+
+```{r}
+dysbiosis_data <- dys_unfiltered_asv %>% full_join(dys_unfiltered_genus, by=c("SampleID","PatientID"))
+dysbiosis_data <- dysbiosis_data %>% full_join(dys_filtered_asv, by=c("SampleID","PatientID"))
+dysbiosis_data <- dysbiosis_data %>% full_join(dys_filtered_genus, by=c("SampleID","PatientID"))
+```
+
+```{r}
+dysbiosis_without_na <- drop_na(dysbiosis_data)
+
+dysbiosis_corr <- cor.table(dysbiosis_without_na[,3:6], cor.method="spearman")[[1]]
+dysbiosis_corr
+```
+
+```{r, fig.width=5, fig.height=5, fig.fullwidth=TRUE}
+pairs(dysbiosis_without_na[,3:6])
+```
+
+```{r}
+ileum_metadata_final <- ileum_metadata %>% full_join(dysbiosis_data, by=c("SampleID"))
+```
+
+```{r}
+ileum_metadata_final_melted <- melt(ileum_metadata_final)
+p <- ggplot(ileum_metadata_final_melted) + 
+  geom_boxplot(aes(x=Group, y=value),outliers = FALSE) + 
+    geom_jitter(width = 0.2,height = 0,aes(x=Group, y=value, color=Group),size=2) +
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  theme_bw() + 
+  scale_fill_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
+scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000"))
+p    
+```
+
+# Analysis - Colon
+
+```{r}
+segment="colon"
+```
+
+## Filtering
+
+Rules: - prevalence \> 5% (per group) - nearZeroVar with default
+settings - sequencing depth \> 5000 - taxonomic assignment at least
+order
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(colon_asv_tab, line = c(5000,10000))
+```
+
+### Sequencing depth
+
+```{r}
+data_filt <- seq_depth_filtering(colon_asv_tab,
+                                 colon_taxa_tab,
+                                 colon_metadata,
+                                 seq_depth_threshold = 10000)
+
+filt_colon_asv_tab <- data_filt[[1]]; alpha_colon_asv_tab <- filt_colon_asv_tab
+filt_colon_taxa_tab <- data_filt[[2]]; alpha_colon_taxa_tab <- filt_colon_taxa_tab
+filt_colon_metadata <- data_filt[[3]]; alpha_colon_metadata <- filt_colon_metadata
+
+seq_step <- dim(filt_colon_asv_tab)[1]
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_colon_asv_tab,line = c(10000))
+```
+
+### NearZeroVar
+
+```{r}
+data_filt <- nearzerovar_filtering(filt_colon_asv_tab,
+                                   filt_colon_taxa_tab,
+                                   filt_colon_metadata)
+
+filt_colon_asv_tab <- data_filt[[1]]
+filt_colon_taxa_tab <- data_filt[[2]]
+nearzero_step <- dim(filt_colon_asv_tab)[1]
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_colon_asv_tab,line = c(5000,10000))
+```
+
+Check zero depth
+
+```{r}
+data_filt <- check_zero_depth(filt_colon_asv_tab, 
+                              filt_colon_taxa_tab, 
+                              filt_colon_metadata)
+
+filt_colon_asv_tab <- data_filt[[1]]; 
+filt_colon_taxa_tab <- data_filt[[2]]; 
+filt_colon_metadata <- data_filt[[3]]; 
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_colon_asv_tab,line = c(5000,10000))
+```
+
+### Final Counts
+
+```{r}
+final_counts_filtering(colon_asv_tab,
+                       filt_colon_asv_tab,
+                       filt_colon_metadata,
+                       seq_step, 0, nearzero_step)
+```
+
+
+## Important taxa
+
+#### ASV level
+
+```{r}
+psc_asv <- read.xlsx("../results/Q1/univariate_analysis/supplements_psc_effect_colon.xlsx",
+                     sheet = "colon ASV")
+psc_increased_asv <- psc_asv$SeqID[psc_asv$log2FoldChange>0]
+psc_decreased_asv <- psc_asv$SeqID[psc_asv$log2FoldChange<0]
+```
+
+#### Genus level
+
+```{r}
+psc_genus <- read.xlsx("../results/Q1/univariate_analysis/supplements_psc_effect_colon.xlsx",
+                     sheet = "colon genus")
+psc_increased_genus <- psc_genus$SeqID[psc_genus$log2FoldChange>0]
+psc_decreased_genus <- psc_genus$SeqID[psc_genus$log2FoldChange<0]
+```
+
+
+## Relative abundances
+
+### dys_unfiltered
+
+#### ASV level 
+
+dys_unfiltered_asv
+
+Calculation
+
+```{r}
+dys_unfiltered_asv <- dysbiosis_index_calculation(colon_asv_tab,
+                                                    colon_metadata,
+                                                    psc_increased_asv,
+                                                    psc_decreased_asv,
+                                                    "dys_unfiltered_asv")
+```
+
+#### Genus level
+
+dys_unfiltered_genus
+
+Aggregation
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,colon_taxa_tab,
+                             taxonomic_level="Genus",names=TRUE)
+
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa <- genus_data[[2]]
+```
+
+Calculation
+
+```{r}
+dys_unfiltered_genus <- dysbiosis_index_calculation(colon_genus_tab,
+                                                    colon_metadata,
+                                                    psc_increased_genus,
+                                                    psc_decreased_genus,
+                                                    "dys_unfiltered_genus")
+```
+
+### dys_filtered
+
+#### ASV level 
+
+dys_filtered_asv
+
+Calculation
+
+```{r}
+dys_filtered_asv <- dysbiosis_index_calculation(filt_colon_asv_tab,
+                                                filt_colon_metadata,
+                                                    psc_increased_asv,
+                                                    psc_decreased_asv,
+                                                    "dys_filtered_asv")
+```
+
+#### Genus level
+
+dys_filtered_genus
+
+Aggregation
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,colon_taxa_tab,
+                             taxonomic_level="Genus",names=TRUE)
+
+filt_data <- filtering_steps(genus_data[[1]],genus_data[[2]],colon_metadata,
+                            seq_depth_threshold=10000)
+
+filt_colon_genus_tab <- filt_data[[1]]
+filt_colon_genus_taxa <- filt_data[[2]]
+filt_colon_metadata <- filt_data[[3]]
+```
+
+Calculation
+
+```{r}
+dys_filtered_genus <- dysbiosis_index_calculation(colon_genus_tab,
+                                                    colon_metadata,
+                                                    psc_increased_genus,
+                                                    psc_decreased_genus,
+                                                    "dys_filtered_genus")
+```
+
+### ALL IN ONE
+
+```{r}
+dysbiosis_data <- dys_unfiltered_asv %>% full_join(dys_unfiltered_genus, by=c("SampleID","PatientID"))
+dysbiosis_data <- dysbiosis_data %>% full_join(dys_filtered_asv, by=c("SampleID","PatientID"))
+dysbiosis_data <- dysbiosis_data %>% full_join(dys_filtered_genus, by=c("SampleID","PatientID"))
+```
+
+```{r}
+dysbiosis_without_na <- drop_na(dysbiosis_data)
+
+dysbiosis_corr <- cor.table(dysbiosis_without_na[,3:6], cor.method="spearman")[[1]]
+dysbiosis_corr
+```
+
+```{r, fig.width=5, fig.height=5, fig.fullwidth=TRUE}
+pairs(dysbiosis_without_na[,3:6])
+```
+
+```{r}
+colon_metadata_final <- colon_metadata %>% full_join(dysbiosis_data, by=c("SampleID"))
+```
+
+```{r}
+colon_metadata_final_melted <- melt(colon_metadata_final)
+p <- ggplot(colon_metadata_final_melted) + 
+  geom_boxplot(aes(x=Group, y=value),outliers = FALSE) + 
+    geom_jitter(width = 0.2,height = 0,aes(x=Group, y=value, color=Group),size=2) +
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  theme_bw() + 
+  scale_fill_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
+scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000"))
+p    
+```
+
+## CLR
+
+### dys_unfiltered
+
+#### ASV level 
+
+**dys_unfiltered_asv**
+
+Calculation
+
+```{r}
+dys_unfiltered_asv <- dysbiosis_index_calculation_clr(colon_asv_tab,
+                                                    colon_metadata,
+                                                    psc_increased_asv,
+                                                    psc_decreased_asv,
+                                                    "dys_unfiltered_asv")
+```
+
+#### Genus level
+
+dys_unfiltered_genus
+
+Aggregation
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,colon_taxa_tab,
+                             taxonomic_level="Genus",names=TRUE)
+
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa <- genus_data[[2]]
+```
+
+Calculation
+
+```{r}
+dys_unfiltered_genus <- dysbiosis_index_calculation_clr(colon_genus_tab,
+                                                    colon_metadata,
+                                                    psc_increased_genus,
+                                                    psc_decreased_genus,
+                                                    "dys_unfiltered_genus")
+```
+
+### dys_filtered
+
+#### ASV level 
+
+dys_filtered_asv
+
+Calculation
+
+```{r}
+dys_filtered_asv <- dysbiosis_index_calculation_clr(filt_colon_asv_tab,
+                                                filt_colon_metadata,
+                                                    psc_increased_asv,
+                                                    psc_decreased_asv,
+                                                    "dys_filtered_asv")
+```
+
+#### Genus level
+
+dys_filtered_genus
+
+Aggregation
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,colon_taxa_tab,
+                             taxonomic_level="Genus",names=TRUE)
+
+filt_data <- filtering_steps(genus_data[[1]],genus_data[[2]],colon_metadata,
+                            seq_depth_threshold=10000)
+
+filt_colon_genus_tab <- filt_data[[1]]
+filt_colon_genus_taxa <- filt_data[[2]]
+filt_colon_metadata <- filt_data[[3]]
+```
+
+Calculation
+
+```{r}
+dys_filtered_genus <- dysbiosis_index_calculation_clr(filt_colon_genus_tab,
+                                                    filt_colon_metadata,
+                                                    psc_increased_genus,
+                                                    psc_decreased_genus,
+                                                    "dys_filtered_genus")
+```
+
+### ALL IN ONE
+
+```{r}
+dysbiosis_data <- dys_unfiltered_asv %>% full_join(dys_unfiltered_genus, by=c("SampleID","PatientID"))
+dysbiosis_data <- dysbiosis_data %>% full_join(dys_filtered_asv, by=c("SampleID","PatientID"))
+dysbiosis_data <- dysbiosis_data %>% full_join(dys_filtered_genus, by=c("SampleID","PatientID"))
+```
+
+```{r}
+dysbiosis_without_na <- drop_na(dysbiosis_data)
+
+dysbiosis_corr <- cor.table(dysbiosis_without_na[,3:6], cor.method="spearman")[[1]]
+dysbiosis_corr
+```
+
+```{r, fig.width=5, fig.height=5, fig.fullwidth=TRUE}
+pairs(dysbiosis_without_na[,3:6])
+```
+
+```{r}
+colon_metadata_final <- colon_metadata %>% full_join(dysbiosis_data, by=c("SampleID"))
+```
+
+```{r, fig.width=10, fig.height=5, fig.fullwidth=TRUE}
+colon_metadata_final_melted <- melt(colon_metadata_final)
+p <- ggplot(colon_metadata_final_melted) + 
+  geom_boxplot(aes(x=Group, y=value),outliers = FALSE) + 
+    geom_jitter(width = 0.2,height = 0,aes(x=Group, y=value, color=Group),size=2) +
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  theme_bw() + 
+  scale_fill_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
+scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000"))
+p    
+```
+
+```{r}
+metadata_dysbiosis_final <- rbind(colon_metadata_final,ileum_metadata_final)
+```
+
+```{r, eval=FALSE}
+write.csv(metadata_dysbiosis_final,
+          "../../data/clinical_data/dysbiosis_metadata.csv",row.names = FALSE)
+```
+
+# ALPHA DIVERSITY
+
+## Data merging
+
+```{r}
+ileum_alpha_data <- read.csv("../results/Q1/alpha_diversity/alpha_indices_terminal_ileum.csv")
+
+colon_alpha_data <- read.csv("../results/Q1/alpha_diversity/alpha_indices_colon.csv")
+
+alpha_data_all <- rbind(ileum_alpha_data,colon_alpha_data[,-8])
+
+metadata_alpha_final <- metadata_dysbiosis_final %>% full_join(alpha_data_all, by=c("SampleID","Country"))
+
+ileum_metadata_alpha <- metadata_alpha_final %>% dplyr::filter(Matrix=="TI")
+colon_metadata_alpha <- metadata_alpha_final %>% dplyr::filter(Matrix!="TI")
+```
+
+## Terminal ileum
+
+### Boxplot
+
+```{r, fig.width=10, fig.height=5, fig.fullwidth=TRUE}
+ileum_alpha_data_melted <- melt(ileum_metadata_alpha)
+p <- ggplot(ileum_alpha_data_melted %>% subset(variable %in% c("Observe","Shannon","Simpson","Pielou"))) + 
+  geom_boxplot(aes(x=Group.x, y=value),outliers = FALSE) + 
+    geom_jitter(width = 0.2,height = 0,aes(x=Group.x, y=value, color=Group.x),size=2) +
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  theme_bw() + 
+  scale_fill_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
+scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000"))
+p    
+```
+
+### Correlation
+
+#### ASV level
+
+```{r}
+ileum_metadata_alpha_final_without_na <- drop_na(ileum_metadata_alpha)
+
+dysbiosis_alpha_corr <- cor.table(ileum_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_asv")], cor.method="spearman")
+dysbiosis_alpha_corr_r <- dysbiosis_alpha_corr[[1]]
+dysbiosis_alpha_corr_p <- dysbiosis_alpha_corr[[3]]
+knitr::kable(dysbiosis_alpha_corr_p < 0.01, caption="SIGNIFICANCE")
+knitr::kable(dysbiosis_alpha_corr_r, caption="SPEARMAN CORR.")
+```
+
+```{r, fig.width=5, fig.height=5, fig.fullwidth=TRUE}
+pairs(ileum_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_asv")])
+```
+
+All in one
+
+```{r}
+df_for_scatter_plot <- ileum_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_asv","Group.x")]
+df_for_scatter_plot_melted <- melt(df_for_scatter_plot,id.vars = c("dys_filtered_asv","Group.x"))
+
+p <- ggplot(df_for_scatter_plot_melted) + 
+  geom_point(aes(x=dys_filtered_asv, y=value),color="black",outliers = TRUE) + 
+  geom_smooth(aes(x=dys_filtered_asv, y=value),method=lm, se=TRUE) + 
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  theme_bw()
+p   
+```
+
+By group
+
+```{r}
+df_for_scatter_plot <- ileum_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_asv","Group.x")]
+df_for_scatter_plot_melted <- melt(df_for_scatter_plot,id.vars = c("dys_filtered_asv","Group.x"))
+
+p <- ggplot(df_for_scatter_plot_melted) + 
+  geom_point(aes(x=dys_filtered_asv, y=value, color=Group.x),outliers = TRUE) + 
+  geom_smooth(aes(x=dys_filtered_asv, y=value),method=lm, se=TRUE) + 
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
+  theme_bw()
+p   
+```
+
+#### Genus level
+
+```{r}
+ileum_metadata_alpha_final_without_na <- drop_na(ileum_metadata_alpha)
+
+dysbiosis_alpha_corr <- cor.table(ileum_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_genus")], cor.method="spearman")
+dysbiosis_alpha_corr_r <- dysbiosis_alpha_corr[[1]]
+dysbiosis_alpha_corr_p <- dysbiosis_alpha_corr[[3]]
+knitr::kable(dysbiosis_alpha_corr_p < 0.01, caption="SIGNIFICANCE")
+knitr::kable(dysbiosis_alpha_corr_r, caption="SPEARMAN CORR.")
+```
+
+```{r, fig.width=5, fig.height=5, fig.fullwidth=TRUE}
+pairs(ileum_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_genus")])
+```
+
+All in one
+
+```{r}
+df_for_scatter_plot <- ileum_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_genus","Group.x")]
+df_for_scatter_plot_melted <- melt(df_for_scatter_plot,id.vars = c("dys_filtered_genus","Group.x"))
+
+p <- ggplot(df_for_scatter_plot_melted) + 
+  geom_point(aes(x=dys_filtered_genus, y=value),color="black",outliers = TRUE) + 
+  geom_smooth(aes(x=dys_filtered_genus, y=value),method=lm, se=TRUE) + 
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  theme_bw()
+p   
+```
+
+By group
+
+```{r}
+df_for_scatter_plot <- ileum_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_genus","Group.x")]
+df_for_scatter_plot_melted <- melt(df_for_scatter_plot,id.vars = c("dys_filtered_genus","Group.x"))
+
+p <- ggplot(df_for_scatter_plot_melted) + 
+  geom_point(aes(x=dys_filtered_genus, y=value, color=Group.x),outliers = TRUE) + 
+  geom_smooth(aes(x=dys_filtered_genus, y=value),method=lm, se=TRUE) + 
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
+  theme_bw()
+p   
+```
+
+## Colon
+
+### Boxplot
+
+```{r, fig.width=10, fig.height=5, fig.fullwidth=TRUE}
+colon_alpha_data_melted <- melt(colon_metadata_alpha)
+p <- ggplot(colon_alpha_data_melted %>% subset(variable %in% c("Observe","Shannon","Simpson","Pielou"))) + 
+  geom_boxplot(aes(x=Group.x, y=value),outliers = FALSE) + 
+    geom_jitter(width = 0.2,height = 0,aes(x=Group.x, y=value, color=Group.x),size=2) +
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  theme_bw() + 
+  scale_fill_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
+scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000"))
+p    
+```
+
+### Correlation
+
+#### ASV level
+
+```{r}
+colon_metadata_alpha_final_without_na <- drop_na(colon_metadata_alpha)
+
+dysbiosis_alpha_corr <- cor.table(colon_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_asv")], cor.method="spearman")
+dysbiosis_alpha_corr_r <- dysbiosis_alpha_corr[[1]]
+dysbiosis_alpha_corr_p <- dysbiosis_alpha_corr[[3]]
+knitr::kable(dysbiosis_alpha_corr_p < 0.01, caption="SIGNIFICANCE")
+knitr::kable(dysbiosis_alpha_corr_r, caption="SPEARMAN CORR.")
+```
+
+```{r, fig.width=5, fig.height=5, fig.fullwidth=TRUE}
+pairs(colon_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_asv")])
+```
+
+All in one
+
+```{r}
+df_for_scatter_plot <- colon_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_asv","Group.x")]
+df_for_scatter_plot_melted <- melt(df_for_scatter_plot,id.vars = c("dys_filtered_asv","Group.x"))
+
+p <- ggplot(df_for_scatter_plot_melted) + 
+  geom_point(aes(x=dys_filtered_asv, y=value),color="black",outliers = TRUE) + 
+  geom_smooth(aes(x=dys_filtered_asv, y=value),method=lm, se=TRUE) + 
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  theme_bw()
+p   
+```
+
+By group
+
+```{r}
+df_for_scatter_plot <- colon_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_asv","Group.x")]
+df_for_scatter_plot_melted <- melt(df_for_scatter_plot,id.vars = c("dys_filtered_asv","Group.x"))
+
+p <- ggplot(df_for_scatter_plot_melted) + 
+  geom_point(aes(x=dys_filtered_asv, y=value, color=Group.x),outliers = TRUE) + 
+  geom_smooth(aes(x=dys_filtered_asv, y=value),method=lm, se=TRUE) + 
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
+  theme_bw()
+p   
+```
+
+#### Genus level
+
+```{r}
+colon_metadata_alpha_final_without_na <- drop_na(colon_metadata_alpha)
+
+dysbiosis_alpha_corr <- cor.table(colon_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_genus")], cor.method="spearman")
+dysbiosis_alpha_corr_r <- dysbiosis_alpha_corr[[1]]
+dysbiosis_alpha_corr_p <- dysbiosis_alpha_corr[[3]]
+knitr::kable(dysbiosis_alpha_corr_p < 0.01, caption="SIGNIFICANCE")
+knitr::kable(dysbiosis_alpha_corr_r, caption="SPEARMAN CORR.")
+```
+
+```{r, fig.width=5, fig.height=5, fig.fullwidth=TRUE}
+pairs(colon_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_genus")])
+```
+
+All in one
+
+```{r}
+df_for_scatter_plot <- colon_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_genus","Group.x")]
+df_for_scatter_plot_melted <- melt(df_for_scatter_plot,id.vars = c("dys_filtered_genus","Group.x"))
+
+p <- ggplot(df_for_scatter_plot_melted) + 
+  geom_point(aes(x=dys_filtered_genus, y=value),color="black",outliers = TRUE) + 
+  geom_smooth(aes(x=dys_filtered_genus, y=value),method=lm, se=TRUE) + 
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  theme_bw()
+p   
+```
+
+By group
+
+```{r}
+df_for_scatter_plot <- colon_metadata_alpha_final_without_na[,c("Observe","Shannon","Simpson","Pielou","dys_filtered_genus","Group.x")]
+df_for_scatter_plot_melted <- melt(df_for_scatter_plot,id.vars = c("dys_filtered_genus","Group.x"))
+
+p <- ggplot(df_for_scatter_plot_melted) + 
+  geom_point(aes(x=dys_filtered_genus, y=value, color=Group.x),outliers = TRUE) + 
+  geom_smooth(aes(x=dys_filtered_genus, y=value),method=lm, se=TRUE) + 
+  facet_wrap(~variable, ncol = 2,scales = "free") + 
+  scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
+  theme_bw()
+p   
+```
+

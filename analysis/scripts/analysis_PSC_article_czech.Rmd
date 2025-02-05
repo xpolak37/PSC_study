@@ -1993,7 +1993,7 @@ saveWorkbook(supplements_wb,file.path(path,paste0("supplements_uni_analysis_wb_"
 
 # PSC effect
 write.xlsx(psc_effect,
-          file.path(path,paste0("supplements_psc_effect_",segment,".csv")))
+          file.path(path,paste0("supplements_psc_effect_",segment,".xlsx")))
 
 # SIGNIFICANT taxa
 write.xlsx(list_intersections[grepl(segment,names(list_intersections))] %>%
@@ -2042,7 +2042,7 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2089,7 +2089,7 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2132,7 +2132,7 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2192,7 +2192,7 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2234,7 +2234,7 @@ filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
 enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2276,7 +2276,7 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2347,7 +2347,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2385,7 +2385,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2423,7 +2423,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2479,7 +2479,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2518,7 +2518,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2557,7 +2557,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2607,7 +2607,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2644,7 +2644,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2681,7 +2681,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2736,7 +2736,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2774,7 +2774,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2812,7 +2812,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2861,7 +2861,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2898,7 +2898,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2936,7 +2936,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -2992,7 +2992,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3030,7 +3030,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3068,7 +3068,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3116,7 +3116,7 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3154,7 +3154,7 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3193,7 +3193,7 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3249,7 +3249,7 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3289,7 +3289,7 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3328,7 +3328,7 @@ enet_model <- glmnet_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3374,7 +3374,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3412,7 +3412,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3450,7 +3450,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3506,7 +3506,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3545,7 +3545,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3584,7 +3584,7 @@ knn_model <- knn_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3630,7 +3630,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3668,7 +3668,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3707,7 +3707,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3764,7 +3764,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3804,7 +3804,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3844,7 +3844,7 @@ rf_model <- rf_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3891,7 +3891,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3929,7 +3929,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -3967,7 +3967,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -4023,7 +4023,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -4062,7 +4062,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -4101,7 +4101,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
                               Q="Q1_czech")
 
@@ -4174,7 +4174,7 @@ knitr::kable(supplements_beta[!grepl("PCoA",names(supplements_beta))],
 
 PCA
 
-```{r, fig.width=8, fig.height=7, fig.fullwidth=TRUE, eval=FALSE}
+```{r, fig.width=8, fig.height=7, fig.fullwidth=TRUE, eval=TRUE}
 ggarrange(plotlist = supplements_beta[grepl("PCoA",names(supplements_beta))],
           labels=names(supplements_beta[grepl("PCoA",names(supplements_beta))]),
           font.label = list(size=5,face="plain"),
@@ -4249,7 +4249,7 @@ knitr::kable(final_df, caption="All models")
 
 ROC - ASV
 
-```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE}
 rocs_list <- supplements_models$roc_cs
 rocs_list[["enet_model"]] <- roc_cs
 
@@ -4266,12 +4266,12 @@ ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face=
 
 ROC - genus
 
-```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE}
 plot_list <- list()
 
 for (model_name in names(rocs_list)) {
   plot_list[[model_name]] <- roc_curve_all_custom(rocs_list[[model_name]][c(4:6)],
-                       Q="Q1",
+                       Q="Q1_czech",
                        model_name=model_name)
 }
 
@@ -4606,7 +4606,7 @@ filt_colon_genus_metadata <- filt_data[[3]]
 pairwise_df <- filt_colon_genus_tab %>% column_to_rownames("SeqID") %>% t()
 
 # main effect
-pp_main <- pairwise.adonis(pairwise_df,filt_colon_metadata_genus$Group,
+pp_main <- pairwise.adonis(pairwise_df,filt_colon_genus_metadata$Group,
                            covariate = NULL, 
                            patients = filt_colon_genus_metadata$Patient,
                            sim.method = "robust.aitchison", p.adjust.m="BH")
@@ -4634,7 +4634,7 @@ knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
 ```{r}
 p <- pca_plot_custom(filt_colon_genus_tab,
                                  filt_colon_genus_taxa,
-                                 filt_colon_metadata_genus,
+                                 filt_colon_genus_metadata,
                                  show_boxplots = TRUE,
                                  variable = "Group", size=3, show_legend=TRUE)
 
@@ -4669,7 +4669,7 @@ level="genus"
 pairwise_df <- filt_colon_genus_tab %>% column_to_rownames("SeqID") %>% t()
 
 # main effect
-pp_main <- pairwise.adonis(pairwise_df,filt_colon_metadata_genus$Group,
+pp_main <- pairwise.adonis(pairwise_df,filt_colon_genus_metadata$Group,
                            covariate = NULL, 
                             patients = filt_colon_genus_metadata$Patient,
                            sim.method = "bray", p.adjust.m="BH")
@@ -4695,7 +4695,7 @@ knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
 ```{r}
 p <- pca_plot_custom(filt_colon_genus_tab,
                                  filt_colon_genus_taxa,
-                                 filt_colon_metadata_genus,
+                                 filt_colon_genus_metadata,
                                  measure = "bray",
                                  show_boxplots = TRUE,
                                  variable = "Group", size=3, show_legend=TRUE)
@@ -4715,7 +4715,7 @@ p
 pairwise_df <- filt_colon_genus_tab %>% column_to_rownames("SeqID") %>% t()
 
 # main effect
-pp_main <- pairwise.adonis(pairwise_df,filt_colon_metadata_genus$Group,
+pp_main <- pairwise.adonis(pairwise_df,filt_colon_genus_metadata$Group,
                            covariate = NULL, 
                             patients = filt_colon_genus_metadata$Patient,
                            sim.method = "jaccard", p.adjust.m="BH")
@@ -4743,7 +4743,7 @@ knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
 ```{r}
 p <- pca_plot_custom(filt_colon_genus_tab,
                                  filt_colon_genus_taxa,
-                                 filt_colon_metadata_genus,
+                                 filt_colon_genus_metadata,
                                  measure = "jaccard",
                                  show_boxplots = TRUE,
                                  variable = "Group", size=3, show_legend=TRUE)
@@ -6223,9 +6223,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC
 roc_c <- roc_curve(enet_model, group)
@@ -6264,9 +6264,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC
 roc_c <- roc_curve(enet_model, group)
@@ -6309,9 +6309,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC
 roc_c <- roc_curve(enet_model, group)
@@ -6371,9 +6371,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC
 roc_c <- roc_curve(enet_model, group)
@@ -6416,9 +6416,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC
 roc_c <- roc_curve(enet_model, group)
@@ -6461,9 +6461,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group",
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC
 roc_c <- roc_curve(enet_model, group)
@@ -6529,9 +6529,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -6569,9 +6569,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -6609,9 +6609,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -6667,9 +6667,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -6708,9 +6708,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -6749,9 +6749,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -6801,9 +6801,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -6840,9 +6840,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -6879,9 +6879,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -6936,9 +6936,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -6976,9 +6976,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -7016,9 +7016,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -7067,9 +7067,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -7106,9 +7106,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -7146,9 +7146,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -7204,9 +7204,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -7244,9 +7244,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -7284,9 +7284,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -7334,9 +7334,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(enet_model, group)
@@ -7374,9 +7374,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(enet_model, group)
@@ -7415,9 +7415,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(enet_model, group)
@@ -7473,9 +7473,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(enet_model, group)
@@ -7515,9 +7515,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(enet_model, group)
@@ -7556,9 +7556,9 @@ enet_model <- glmnet_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                               clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(enet_model, group)
@@ -7604,9 +7604,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -7644,9 +7644,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -7684,9 +7684,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -7742,9 +7742,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -7783,9 +7783,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -7824,9 +7824,9 @@ knn_model <- knn_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(knn_model, group)
@@ -7872,9 +7872,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -7912,9 +7912,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -7953,9 +7953,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -8012,9 +8012,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -8054,9 +8054,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -8096,9 +8096,9 @@ rf_model <- rf_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                         clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(rf_model, group)
@@ -8145,9 +8145,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -8185,9 +8185,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -8225,9 +8225,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -8283,9 +8283,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -8324,9 +8324,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -8365,9 +8365,9 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=FALSE,
+                              reuse=TRUE,
                               file=model_name,
-                              Q="Q1")
+                              Q="Q1_czech")
 
 # ROC curve
 roc_c <- roc_curve(gbm_model, group)
@@ -8500,14 +8500,14 @@ knitr::kable(models_summ_df_colon %>% dplyr::select(
 
 ```{r}
 roc_curve_all_custom(roc_cs[c(7:9)], 
-                     Q="Q1",
+                     Q="Q1_czech",
                      model_name="enet_model")
 ```
 
 **ROC - Genus level**
 
 ```{r}
-roc_curve_all_custom(roc_cs[c(10:12)],Q="Q1",
+roc_curve_all_custom(roc_cs[c(10:12)],Q="Q1_czech",
                      model_name="enet_model")
 ```
 
@@ -8538,7 +8538,7 @@ write.csv(final_df,file=file.path(path,"AUC_all_models.csv"),row.names = FALSE)
 
 ROC - ASV
 
-```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE}
 rocs_list <- supplements_models$roc_cs
 rocs_list[["enet_model"]] <- roc_cs
 
@@ -8546,7 +8546,7 @@ plot_list <- list()
 
 for (model_name in names(rocs_list)) {
   plot_list[[model_name]] <- roc_curve_all_custom(rocs_list[[model_name]][c(1:3)],
-                       Q="Q1",
+                       Q="Q1_czech",
                        model_name=model_name)
 }
 
@@ -8555,12 +8555,12 @@ ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face=
 
 ROC - genus
 
-```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE}
 plot_list <- list()
 
 for (model_name in names(rocs_list)) {
   plot_list[[model_name]] <- roc_curve_all_custom(rocs_list[[model_name]][c(4:6)],
-                       Q="Q1",
+                       Q="Q1_czech",
                        model_name=model_name)
 }
 

@@ -107,7 +107,7 @@ merging_data <- function(asv_tab_1, asv_tab_2,
 
   # TAB 1
   if (segment=="TI") metadata_1 <- metadata_1[metadata_1$Matrix == segment,]
-  else if (segment=="colon") metadata_1 <- metadata_1[metadata_1$Matrix %in% c("Cecum","Rectum","CD"),]
+  else if (segment=="colon") metadata_1 <- metadata_1[metadata_1$Matrix %in% c("Cecum","Rectum","CD","CA","CD","SI"),]
   asv_tab_1 <- asv_tab_1[,c(TRUE,colnames(asv_tab_1)[-1] %in% metadata_1$SampleID)]
   taxa_tab_1 <- taxa_tab_1[taxa_tab_1$SeqID %in% asv_tab_1$SeqID,]
   
@@ -2463,8 +2463,8 @@ roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
   
   #colors <- c("#FF6347","#556B2F","#7B68EE","#17BACB","#708090","#FFA500")
   
-  if (Q=="Q1") colors <- c("#FF6347","#708090","#17BACB")
-  if (Q=="Q2") {
+  if (grepl("^Q1", Q)) colors <- c("#FF6347","#708090","#17BACB")
+  if (grepl("^Q2",Q)) {
     #colors <- c("#FF7F50","#FFD700","#4169E1","#008080") 
     colors <- c("#008080","#FFD700","#4169E1","#FF7F50")
   }
@@ -2962,6 +2962,7 @@ basic_univariate_statistics <- function(uni_data, group=NULL){
   return(res)
 }
 
+
 ## glmnet functions ----
 glmnet_binomial <- function(data,
                             outcome,
@@ -2970,6 +2971,7 @@ glmnet_binomial <- function(data,
                             N = 10, # number of bootstrap datasets
                             alphas = seq(0, 1, by = 0.2),
                             family = 'binomial',
+                            overfitting_check=FALSE,
                             seed = 123,
                             reuse=FALSE,
                             file=NULL,
@@ -2980,11 +2982,18 @@ glmnet_binomial <- function(data,
   inv_logit <- function(x){exp(x)/(1+exp(x))}
   if (all(data[,1] >= 0 & data[,1] <= 1)) ra = TRUE
   else ra = FALSE
+  
+  if (overfitting_check) {
+    data$Group <- sample(data$Group)
+  }
+  
   if (reuse){
     if (ra) {
-      load(file.path("../intermediate_files/models/",Q,file,"enet_model_ra.RData"))
+      if (overfitting_check) load(file.path("../intermediate_files/models_overfitting_check/",Q,file,"enet_model_ra.RData"))
+      else load(file.path("../intermediate_files/models/",Q,file,"enet_model_ra.RData"))
     } else {
-      load(file.path("../intermediate_files/models/",Q,file,"enet_model.RData"))
+      if (overfitting_check) load(file.path("../intermediate_files/models_overfitting_check/",Q,file,"enet_model.RData"))
+      else load(file.path("../intermediate_files/models/",Q,file,"enet_model.RData"))
     }
   } else {
     set.seed(seed)
@@ -3062,34 +3071,38 @@ glmnet_binomial <- function(data,
                   levels = c(0, 1))
     
     # country specific  - czech
-    
-    ## predicted classes as numerical variables
-    predictors_czech <- data[data$Country == "CZ",] %>% 
-      dplyr::select(-dplyr::all_of(c(outcome,"Country", clust_var))) %>% 
-      as.matrix()
-    
-    predicted_czech = as.numeric(predict(fit, newx = predictors_czech,type = "class"))
-    predicted_czech_num = as.numeric(predict(fit, newx = predictors_czech))
-    outcome_czech <- original_outcome[data$Country == "CZ"]
-    
-    ## get predictions and performance
-    prediction_czech <- data.frame(
-      predicted = predicted_czech,
-      predicted_num=predicted_czech_num,
-      outcome = outcome_czech)
-    
-    ## confusion matrix
-    if (length(unique(prediction_czech$predicted))>1){
-      conf_matrix_czech <- table(True = prediction_czech$outcome, Predicted = prediction_czech$predicted) 
-    } else {
-      conf_matrix_czech <- cbind(table(True = prediction_czech$outcome, Predicted = prediction_czech$predicted),c(0,0)) 
+    if ("CZ" %in% data$Country){ 
+      ## predicted classes as numerical variables
+      predictors_czech <- data[data$Country == "CZ",] %>% 
+        dplyr::select(-dplyr::all_of(c(outcome,"Country", clust_var))) %>% 
+        as.matrix()
+      
+      predicted_czech = as.numeric(predict(fit, newx = predictors_czech,type = "class"))
+      predicted_czech_num = as.numeric(predict(fit, newx = predictors_czech))
+      outcome_czech <- original_outcome[data$Country == "CZ"]
+      
+      ## get predictions and performance
+      prediction_czech <- data.frame(
+        predicted = predicted_czech,
+        predicted_num=predicted_czech_num,
+        outcome = outcome_czech)
+      
+      ## confusion matrix
+      if (length(unique(prediction_czech$predicted))>1){
+        conf_matrix_czech <- table(True = prediction_czech$outcome, Predicted = prediction_czech$predicted) 
+      } else {
+        conf_matrix_czech <- cbind(table(True = prediction_czech$outcome, Predicted = prediction_czech$predicted),c(0,0)) 
+      }
+      
+      auc_czech <- roc(outcome ~ predicted_num, 
+                       data = prediction_czech,
+                       direction = '<',
+                       levels = c(0, 1))$auc
+    } else{
+      prediction_czech = NULL
+      auc_czech <- NaN
+      conf_matrix_czech = NaN
     }
-    
-    auc_czech <- roc(outcome ~ predicted_num, 
-                     data = prediction_czech,
-                     direction = '<',
-                     levels = c(0, 1))$auc
-    
     # country specific  - norway
     ## predicted classes as numerical variables
     if ("NO" %in% data$Country){
@@ -3294,12 +3307,21 @@ glmnet_binomial <- function(data,
                        trained_model=fit)
     
     # save results
-    if (!dir.exists(file.path("../intermediate_files/models/",Q,file))){
+    if (overfitting_check){
+     if (!dir.exists(file.path("../intermediate_files/models_overfitting_check/",Q,file))){
+      dir.create(file.path("../intermediate_files/models_overfitting_check/",Q,file))
+     }
+      if (ra) save(enet_model,file=file.path("../intermediate_files/models_overfitting_check/",Q,file,"enet_model_ra.RData"))
+      else save(enet_model,file=file.path("../intermediate_files/models_overfitting_check/",Q,file,"enet_model.RData"))
+      
+    } else {
+      if (!dir.exists(file.path("../intermediate_files/models/",Q,file))){
       dir.create(file.path("../intermediate_files/models/",Q,file))
+      }
+      if (ra) save(enet_model,file=file.path("../intermediate_files/models/",Q,file,"enet_model_ra.RData"))
+      else save(enet_model,file=file.path("../intermediate_files/models/",Q,file,"enet_model.RData"))
     }
     
-    if (ra) save(enet_model,file=file.path("../intermediate_files/models/",Q,file,"enet_model_ra.RData"))
-    else save(enet_model,file=file.path("../intermediate_files/models/",Q,file,"enet_model.RData"))
   }
   
   return(enet_model)
@@ -3375,6 +3397,7 @@ gbm_binomial <- function(data,
                          clust_var=NULL,
                          N = 10, # number of bootstrap datasets
                          family = 'binomial',
+                         overfitting_check=FALSE,
                          seed = 123,
                          reuse=FALSE,
                          file=NULL,
@@ -3638,6 +3661,7 @@ knn_binomial <- function(data,
                          clust_var=NULL,
                          N = 10, # number of bootstrap datasets
                          family = 'binomial',
+                         overfitting_check=FALSE,
                          seed = 123,
                          reuse=FALSE,
                          file=NULL,
@@ -3873,6 +3897,7 @@ rf_binomial <- function(data,
                          N = 10, # number of bootstrap datasets
                          alphas = seq(0, 1, by = 0.2),
                          family = 'binomial',
+                         overfitting_check=FALSE,
                          seed = 123,
                          reuse=FALSE,
                          file=NULL,
