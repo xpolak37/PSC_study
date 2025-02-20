@@ -1,6 +1,14 @@
 ---
-title: "PSC clinical impact"
-output: html_notebook
+title: "PSC, clinical impact - CZECH"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    toc_depth: 6
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
 ```{r}
@@ -19,17 +27,20 @@ source("custom_functions.R")
 ```{r}
 clinical_boxplot <- function(metadata,variable){
   metadata_var <- metadata %>% dplyr::select(all_of(c("PatientID",
-                                                       variable, "Group"))) %>% as.data.frame()
+                                                       variable, "Group","Country"))) %>% as.data.frame()
   metadata_var[,variable] <- as.numeric(metadata_var[,variable])
   metadata_var_without_na <- metadata_var[!is.na(metadata_var[,variable]),]
-  colors <- c("#309f87","#F08080","#f9c675","#A00000")
+  colors <- c("#309f87","#f9c675","#F08080","#A00000")
   if (length(unique(metadata_var_without_na$Group))==1) colors <- c("#f9c675")
+  if (!"healthy" %in% unique(metadata_var_without_na$Group)) colors <- c("#f9c675","#F08080","#A00000")
+  
 p <- ggplot(metadata_var_without_na) + 
   geom_boxplot(aes(x=Group, y=!!sym(variable)),outliers = FALSE) + 
-    geom_jitter(width = 0.2,height = 0,aes(x=Group, y=!!sym(variable), color=Group),size=2) +
+    geom_jitter(width = 0.2,height = 0,aes(x=Group, y=!!sym(variable), color=Group,shape=Country),size=2) +
   scale_fill_manual(values=colors) + 
 scale_color_manual(values=colors) + 
-  theme_bw()
+   theme_minimal() + 
+ theme(panel.border = element_rect(color = "black", fill = NA, size = 0))
 return(p)
 }
 ```
@@ -40,9 +51,11 @@ clinical_correlation <- function(metadata,variable,level,
   set.seed(123)
   level <- tolower(level)
   
-  metadata_var <- metadata %>% dplyr::select(all_of(c("SampleID", "PatientID",
-                                                    paste0("dys_filtered_",level),
-                                                       variable, "Group")))
+  metadata_var <- metadata %>% 
+    dplyr::select(all_of(c("SampleID", "PatientID",
+                paste0("dys_filtered_",level),
+                variable, "Group")))
+  
   metadata_var[,variable] <- as.numeric(metadata_var[,variable])
   metadata_var <- drop_na(metadata_var)
   
@@ -55,40 +68,29 @@ clinical_correlation <- function(metadata,variable,level,
       slice_sample(n = 1) %>% # Randomly pick one row per PatientID
       ungroup()
       
-      corr <- cor.table(random_sampled_df[,c(variable,paste0("dys_filtered_",level))], cor.method="spearman")
+      corr <- cor.table(
+        random_sampled_df[,c(variable,paste0("dys_filtered_",level))], 
+        cor.method="spearman"
+        )
+      
       corr$P <- corr$P[2]
       corr$r <- corr$r[2]
       corrs[[i]] <- corr
     }
+    
     r_values_list <- unlist(map(corrs, ~ .x$r))  # List of r matrices
     p_values_list <- unlist(map(corrs, ~ .x$P))  # List of P matrices
     mean_r <- round(median(r_values_list),2)
     
     p_value <- quantile(p_values_list,0.9)
-    
-    #min_p <- min(p_values_list)
-    #min_p <- round(min_p,2)
-    #min_p <- ifelse(min_p<=0.05,"< 0.05",ifelse(min_p<=0.01,"< 0.01",ifelse(min_p<=0.001,"< 0.001",paste0("= ",min_p))))
-    
-    #max_p <- max(p_values_list)
-    #max_p <- round(max_p,2)
-    #max_p <- ifelse(max_p<=0.05,"< 0.05",ifelse(max_p<=0.01,"< 0.01",ifelse(max_p<=0.001,"< 0.001",max_p)))
-    
-    #if (min_p==max_p) combined_df <- min_p
-    #else {
-      #max_p <- round(quantile(corr$P,0.9),2)
-      #combined_df <- ifelse(max_p<=0.05,"< 0.05",ifelse(max_p<=0.01,"< 0.01",ifelse(max_p<=0.001,"< 0.001",paste("=",max_p) )))
-    #}
     corr <- list()
     corr$r <- mean_r
-    #corr$P <- combined_df
     corr$P <- p_value
   } else {
-    corr <- cor.table(metadata_var[,c(variable,paste0("dys_filtered_",level))], cor.method="spearman")
-    #max_p <- round(corr$P[2],2)
-    #max_p <- 
-    #  max_p <- ifelse(max_p<=0.05,"< 0.05",ifelse(max_p<=0.01,"< 0.01",ifelse(max_p<=0.001,"< 0.001",paste0("= ",max_p))))
-    #corr$P <- max_p
+    corr <- cor.table(
+      metadata_var[,c(variable,paste0("dys_filtered_",level))],
+      cor.method="spearman")
+    
     corr$P <- corr$P[2]
     corr$r <- round(corr$r[2],2)
   }
@@ -158,42 +160,50 @@ clinical_correlation_abundances <- function(metadata,variable,taxon,level,
 
 clinical_scatter <- function(corr,metadata,variable,level){
   level <- tolower(level)
-  df_for_scatter_plot <- metadata %>% dplyr::select(all_of(c("SampleID", "PatientID",
-                                                       paste0("dys_filtered_",level),
-                                                       variable, "Group")))
+  df_for_scatter_plot <- metadata %>% 
+    dplyr::select(all_of(c("SampleID", "PatientID",
+                           paste0("dys_filtered_",level),
+                           variable, "Group","Country")))
   
   df_for_scatter_plot[,variable] <- as.numeric(df_for_scatter_plot[,variable])
+  
   df_for_scatter_plot <- drop_na(df_for_scatter_plot)
   
-  colors <- c("#309f87","#F08080","#f9c675","#A00000")
-  if (!"healthy" %in% unique(df_for_scatter_plot$Group)) colors <- c("#F08080","#f9c675","#A00000")
+  colors <- c("#309f87","#f9c675","#F08080","#A00000")
+  if (!"healthy" %in% unique(df_for_scatter_plot$Group)) colors <- c("#f9c675","#F08080","#A00000")
   
   r_corr <- corr$r
   p_corr <- corr$P
+  p_corr <- ifelse(p_corr < 0.001, "<0.001", ifelse(p_corr < 0.01, "<0.01", ifelse(p_corr < 0.05, "<0.05", paste0("=",round(p_corr,3)))))
+  
   x_var <- paste0("dys_filtered_",level)
   x_position <- (max(df_for_scatter_plot[,x_var])) - 0.2*(max(df_for_scatter_plot[,x_var]) - min(df_for_scatter_plot[,x_var]))
+  
   y_position <- max(df_for_scatter_plot[,variable]) - 0.05*(max(df_for_scatter_plot[,variable]) - min(df_for_scatter_plot[,variable]))
+  
   labels <- paste0("r = ",r_corr, "\\np ",p_corr)
   p <- ggplot(df_for_scatter_plot) + 
-  geom_point(aes(x=!!sym(x_var), y=!!sym(variable), color=Group)) + 
+  geom_point(aes(x=!!sym(x_var), y=!!sym(variable), color=Group,shape=Country)) + 
   geom_smooth(aes(x=!!sym(x_var), y=!!sym(variable)),method=lm, se=TRUE) +
     geom_text(aes(x=x_position, y=y_position),
                   label=gsub("\\\\n", "\n", labels),hjust = 0) + 
   scale_color_manual(values=colors) + 
-  theme_bw()
+  theme_minimal() + 
+ theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
+  xlab("MDI")
   return(p)
 }
 
 clinical_scatter_abundances <- function(corr,metadata,variable,taxon,level,
                                         size=4){
   level <- tolower(level)
-  df_for_scatter_plot <- metadata %>% dplyr::select(all_of(c("SampleID", "PatientID",
+  df_for_scatter_plot <- metadata %>% dplyr::select(all_of(c("SampleID", "PatientID","Country",
                                                        taxon,
                                                        variable, "Group")))
   df_for_scatter_plot[,variable] <- as.numeric(df_for_scatter_plot[,variable])
   df_for_scatter_plot <- drop_na(df_for_scatter_plot)
-  colors <- c("#309f87","#F08080","#f9c675","#A00000")
-  if (!"healthy" %in% unique(df_for_scatter_plot$Group)) colors <- c("#F08080","#f9c675","#A00000")
+  colors <- c("#309f87","#f9c675","#F08080","#A00000")
+  if (!"healthy" %in% unique(df_for_scatter_plot$Group)) colors <- c("#f9c675","#F08080","#A00000")
   
   x_var <- taxon
   r_corr <- corr$r
@@ -203,11 +213,12 @@ clinical_scatter_abundances <- function(corr,metadata,variable,taxon,level,
   y_position <- max(df_for_scatter_plot[,variable]) - 0.05*(max(df_for_scatter_plot[,variable]) - min(df_for_scatter_plot[,variable]))
   labels <- paste0("r = ",r_corr, "\\np ",p_corr)
   p <- ggplot(df_for_scatter_plot) + 
-  geom_point(aes(x=!!sym(x_var), y=!!sym(variable), color=Group)) + 
+  geom_point(aes(x=!!sym(x_var), y=!!sym(variable), color=Group,shape=Country)) + 
   geom_smooth(aes(x=!!sym(x_var), y=!!sym(variable)),method=lm, se=TRUE) +
     geom_text(aes(x=x_position, y=y_position,label=gsub("\\\\n", "\n", labels)),size=size) + 
   scale_color_manual(values=colors) + 
-  theme_bw()
+  theme_minimal() + 
+ theme(panel.border = element_rect(color = "black", fill = NA, size = 0))
   return(p)
 }
 
@@ -244,103 +255,583 @@ clinical_boxplot_categorical <- function(metadata, variable,level){
     geom_boxplot(aes(x=!!sym(variable), y=!!sym(y_var)),outliers = FALSE) + 
       geom_jitter(width = 0.2,height = 0,aes(x=!!sym(variable), y=!!sym(y_var),
                                              color=Group),size=2) +
-    scale_fill_manual(values=c("#F08080","#f9c675","#A00000")) + 
-  scale_color_manual(values=c("#F08080","#f9c675","#A00000")) + 
-    theme_bw()
+    scale_fill_manual(values=c("#f9c675","#F08080","#A00000")) + 
+  scale_color_manual(values=c("#f9c675","#F08080","#A00000")) + 
+    theme_minimal() + 
+ theme(panel.border = element_rect(color = "black", fill = NA, size = 0))
   return(p)
 p
 }
 ```
 
-# Import data
+```{r}
+subprepare_for_heatmap <- function(corrs_segment,MDI=TRUE){
+    corrs_segment <- corrs_segment[!grepl("_log_",names(corrs_segment))]
+    names(corrs_segment) <- gsub("score_","",names(corrs_segment))
+    # Example list structure for demonstration
+    # Initialize empty lists for r and P values
+    r_values <- list()
+    p_values <- list()
+    
+    # Extract segment and clinical variables
+    for (name in names(corrs_segment)) {
+      if (MDI) {
+        clinical_var <- sub("^(.*?_){2}", "",  name)
+        if (all(grepl("ileum",names(corrs_segment)))) {
+        segment <- "MDI terminal ileum"
+      } else if (all(grepl("colon",names(corrs_segment)))) {
+        segment <- "MDI colon"
+      } else (message("PROBLEM with segment"))
+        
+      }
+      else {
+        segment <- sub("^(.*?_){3}", "",  name)
+        clinical_var <- sub(segment,"", sub("^(.*?_){2}", "",  name))
+        clinical_var <- gsub("_","",clinical_var)
+      }
+  
+
+      # Fill the r and P lists
+      if (!is.null(corrs_segment[[name]]$r)) {
+        r_values[[segment]][clinical_var] <- corrs_segment[[name]]$r
+      }
+      
+      if (!is.null(corrs_segment[[name]]$P)) {
+        p_values[[segment]][clinical_var] <- corrs_segment[[name]]$P
+      }
+    }
+
+    # Convert the lists to data frames
+    r_df <- do.call(rbind, lapply(r_values, function(x) setNames(as.data.frame(t(x)), names(x))))
+    p_df <- do.call(rbind, lapply(p_values, function(x) setNames(as.data.frame(t(x)), names(x))))
+    
+    # Add row names as segment names
+    rownames(r_df) <- names(r_values)
+    rownames(p_df) <- names(p_values)
+    
+    if (MDI) pd_df_corrected <- as.data.frame(p.adjust(p_df,method="BH"))
+    else pd_df_corrected <- as.data.frame(apply(p_df,2,function(x) p.adjust(x, method="BH")))
+    p_df_sig <- pd_df_corrected
+    p_df_sig[,] <- ""
+    
+    p_df_sig[pd_df_corrected < 0.05] <- "*"
+    p_df_sig[pd_df_corrected < 0.01] <- "**"
+    p_df_sig[pd_df_corrected < 0.001] <- "***"
+    
+    if (MDI) p_df_sig <- t(p_df_sig) %>% 
+      as.data.frame()  %>% 
+      `rownames<-`(segment)
+    
+    return(list(p_df_sig,r_df))
+}
+
+prepare_for_heatmap <- function(corrs_ileum,corrs_colon){
+
+  ileum_list <- subprepare_for_heatmap(corrs_ileum)
+  colon_list <- subprepare_for_heatmap(corrs_colon)
+
+  p_df_sig <- rbind(ileum_list[[1]],colon_list[[1]])
+  r_df <- rbind(ileum_list[[2]],colon_list[[2]])
+
+  return(list(p_df_sig,r_df))
+  
+}
+
+```
+
+
+# Import clinical data
+
+## CZ
 
 ```{r}
-metadata_final <- read.xlsx("pacienti/final_metadata/metadata_final_clinical.xlsx")
+# clinical metadata
+metadata_clinical <- read.csv("../../data/clinical_data/clinical_metadata_cz.csv")
+metadata_clinical$PatientID <- as.character(metadata_clinical$PatientID)
+
+# DYSBIOSIS
+metadata_dysbiosis <- read.csv("../../data/clinical_data/dysbiosis_metadata.csv") %>%
+  dplyr::filter(Country=="CZ")
+
+# ALPHA DIVERSITY
+metadata_alpha_ileum <- read.csv(
+  "../results/Q1/alpha_diversity/alpha_indices_terminal_ileum.csv") %>%
+  dplyr::filter(Country=="CZ")
+
+metadata_alpha_colon <- read.csv(
+  "../results/Q1/alpha_diversity/alpha_indices_colon.csv") %>%
+  dplyr::filter(Country=="CZ")
+
+metadata_alpha <- rbind(metadata_alpha_ileum,metadata_alpha_colon) %>%
+  mutate(PatientID=Patient) %>%
+  dplyr::select(-c(Patient, Group))
+
+# MERGING
+metadata_cz <- full_join(metadata_clinical, metadata_dysbiosis, by=c("SampleID","Matrix","PatientID","Group","Country"))
+
+metadata_cz <- full_join(metadata_cz, metadata_alpha, by=c("SampleID","PatientID","Country"))
+
+metadata_cz$Group <- factor(metadata_cz$Group,levels = c("healthy","pre_ltx","non-rPSC","rPSC"))
+```
+
+## NO
+
+```{r}
+# clinical metadata
+metadata_clinical <- read.csv("../../data/clinical_data/clinical_metadata_no.csv")
+metadata_clinical %<>% mutate(PatientID=subjectid,
+                              Matrix=segment) %>%
+  dplyr::select(-subjectid,-segment)
+metadata_clinical$PatientID <- as.character(paste0("NO_",metadata_clinical$PatientID))
+
+# DYSBIOSIS
+metadata_dysbiosis <- read.csv("../../data/clinical_data/dysbiosis_metadata.csv") %>%
+  dplyr::filter(Country=="NO")  %>%
+  dplyr::select(-c(Patient))
+
+# ALPHA DIVERSITY
+metadata_alpha_ileum <- read.csv(
+  "../results/Q1/alpha_diversity/alpha_indices_terminal_ileum.csv") %>%
+  dplyr::filter(Country=="NO")
+
+metadata_alpha_colon <- read.csv(
+  "../results/Q1/alpha_diversity/alpha_indices_colon.csv") %>%
+  dplyr::filter(Country=="NO")
+
+metadata_alpha <- rbind(metadata_alpha_ileum,metadata_alpha_colon) %>%
+  mutate(PatientID=Patient) %>%
+  dplyr::select(-c(Patient, Group))
+
+# MERGING
+metadata_no <- full_join(metadata_clinical, metadata_dysbiosis, by=c("SampleID","Matrix","PatientID","Group","Country"))
+
+metadata_no <- full_join(metadata_no, metadata_alpha, by=c("SampleID","PatientID","Country"))
+
+metadata_no$Group <- factor(metadata_no$Group,levels = c("healthy","pre_ltx","non-rPSC","rPSC"))
+```
+
+## Merging metadata
+
+```{r}
+metadata_cz %<>% dplyr::mutate(Calprotectin=Fecal.calprotectin,
+                             AOM=AOM_score,
+                             APRI=APRI_score,
+                             FIB4=FIB4_score) %>%
+  dplyr::select(SampleID,Matrix,PatientID,Group,Country,Bilirubin,ALP,Calprotectin,
+                MAYO_PSC,AOM,APRI,FIB4,Platelets,AST,Creatinine,
+                Albumin,ALT,PSC_IBD,GGT,INR,Albumin,Nancy_max,eMAYO,MAYO_dai,
+                dys_unfiltered_asv,dys_unfiltered_genus,
+                dys_filtered_asv,dys_filtered_genus,
+                Observe,Shannon,Simpson,Pielou)
+
+metadata_no %<>% dplyr::mutate(Platelets=TRC,
+                             Creatinine=Kreatinin,
+                             MAYO_PSC=Mayo_score,
+                             AST=ASAT/60,
+                             ALT=ALAT/60,
+                             PSC_IBD=IBD,
+                             Bilirubin=Bilirubin*17.1,
+                             ALP=ALP/60,
+                             Albumin=Albumin*10) %>%
+  dplyr::mutate(PSC_IBD = case_when(
+      PSC_IBD == "no_ibd" ~ "0",
+      PSC_IBD == "ibd" ~ "1",
+      TRUE ~ Group  # Keep other values as is
+    )) %>%
+  dplyr::select(SampleID,Matrix,PatientID,Group,Country,Bilirubin,ALP,Calprotectin,
+                MAYO_PSC,AOM,APRI,FIB4,Platelets,AST,Creatinine,
+                Albumin,ALT,PSC_IBD,
+                dys_unfiltered_asv,dys_unfiltered_genus,
+                dys_filtered_asv,dys_filtered_genus,
+                Observe,Shannon,Simpson,Pielou) 
+
+metadata_final <- merge(metadata_cz,metadata_no,all = TRUE)
+```
+
+
+```{r}
+variables <- c("PatientID", "Group", "Country",
+               "Bilirubin", "Albumin",
+               "ALP", "Platelets",
+               "Calprotectin",
+               "MAYO_PSC","AOM", 
+               "APRI","INR",
+               "FIB4",
+                     "Creatinine",
+                     "ALT",
+                     "AST","GGT","Nancy_max","eMAYO","MAYO_dai")
 ```
 
 ```{r}
-metadata_final$Fecal.calprotectin[metadata_final$Group=="healthy"] <- NA
-metadata_final$INR[metadata_final$Group=="healthy"] <- NA
+metadata_final$Calprotectin[metadata_final$Group=="healthy"] <- NA
+metadata_final$Calprotectin[metadata_final$Calprotectin==">6000"] <- 6000
+metadata_final$Calprotectin <- as.numeric(metadata_final$Calprotectin)
+  
 metadata_ileum <- metadata_final %>% subset(Matrix=="TI") %>% as.data.frame()
 metadata_colon <- metadata_final %>% subset(Matrix!="TI") %>% as.data.frame()
 
-metadata_for_boxplots <- metadata_final[,c(3,8,10:28)] %>%
+# TO DO!!!!!!!!!!!!!! nefunguje ako ma
+metadata_for_boxplots <- metadata_final[,variables] %>%
   group_by(PatientID) %>%
-  distinct() %>%
+  distinct(PatientID, .keep_all = TRUE) %>%
   as.data.frame()
-
 ```
+
+# Import microbiome data
+
+**Data Import**
+
+Importing ASV, taxa and metadata tables for both Czech and Norway
+samples.
+
+*Czech*
+
+```{r}
+path = "../../data/analysis_ready_data/ikem/"
+asv_tab_ikem <- as.data.frame(fread(file.path(path,"asv_table_ikem.csv"),
+                                    check.names = FALSE))
+taxa_tab_ikem <- as.data.frame(fread(file.path(path,"taxa_table_ikem.csv"),
+                                     check.names = FALSE))
+metadata_ikem <- as.data.frame(fread(file.path(path,"metadata_ikem.csv"),
+                                     check.names = FALSE))
+```
+
+*Norway*
+
+```{r}
+path = "../../data/analysis_ready_data/norway/"
+asv_tab_norway <- as.data.frame(fread(file.path(path,"asv_table_norway.csv"),
+                                    check.names = FALSE))
+taxa_tab_norway <- as.data.frame(fread(file.path(path,"taxa_table_norway.csv"),
+                                     check.names = FALSE))
+metadata_norway <- as.data.frame(fread(file.path(path,"metadata_norway.csv"),
+                                     check.names = FALSE))
+```
+
+**Spliting to segments**
+
+*Terminal ileum*
+
+```{r}
+ileum_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=asv_tab_norway,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=taxa_tab_norway,
+                           metadata_1=metadata_ikem,
+                           metadata_2=metadata_norway,
+                           segment="TI",Q="clinical")
+
+ileum_asv_tab <- ileum_data[[1]]
+ileum_taxa_tab <- ileum_data[[2]]
+ileum_metadata <- ileum_data[[3]]
+```
+
+*Colon*
+
+```{r}
+colon_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=asv_tab_norway,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=taxa_tab_norway,
+                           metadata_1=metadata_ikem,
+                           metadata_2=metadata_norway,
+                           segment="colon",Q="clinical")
+
+colon_asv_tab <- colon_data[[1]]
+colon_taxa_tab <- colon_data[[2]]
+colon_metadata <- colon_data[[3]]
+```
+
+**Filtering**
+
+Rules: - prevalence \> 5% (per group) - nearZeroVar with default
+settings - sequencing depth \> 5000 - taxonomic assignment at least
+order
+
+*Sequencing depth*
+
+```{r}
+data_filt <- seq_depth_filtering(ileum_asv_tab,
+                                 ileum_taxa_tab,
+                                 ileum_metadata,
+                                 seq_depth_threshold = 10000)
+
+filt_ileum_asv_tab <- data_filt[[1]]; alpha_ileum_asv_tab <- filt_ileum_asv_tab
+filt_ileum_taxa_tab <- data_filt[[2]]; alpha_ileum_taxa_tab <- filt_ileum_taxa_tab
+filt_ileum_metadata <- data_filt[[3]]; alpha_ileum_metadata <- filt_ileum_metadata
+
+seq_step <- dim(filt_ileum_asv_tab)[1]
+```
+
+*NearZeroVar*
+
+```{r}
+data_filt <- nearzerovar_filtering(filt_ileum_asv_tab, 
+                                   filt_ileum_taxa_tab,
+                                   filt_ileum_metadata)
+
+filt_ileum_asv_tab <- data_filt[[1]]
+filt_ileum_taxa_tab <- data_filt[[2]]
+nearzero_step <- dim(filt_ileum_asv_tab)[1]
+```
+
+**Filtering**
+
+Rules: - prevalence \> 5% (per group) - nearZeroVar with default
+settings - sequencing depth \> 5000 - taxonomic assignment at least
+order
+
+*Sequencing depth*
+
+```{r}
+data_filt <- seq_depth_filtering(colon_asv_tab,
+                                 colon_taxa_tab,
+                                 colon_metadata,
+                                 seq_depth_threshold = 10000)
+
+filt_colon_asv_tab <- data_filt[[1]]; alpha_colon_asv_tab <- filt_colon_asv_tab
+filt_colon_taxa_tab <- data_filt[[2]]; alpha_colon_taxa_tab <- filt_colon_taxa_tab
+filt_colon_metadata <- data_filt[[3]]; alpha_colon_metadata <- filt_colon_metadata
+
+seq_step <- dim(filt_colon_asv_tab)[1]
+```
+
+*NearZeroVar*
+
+```{r}
+data_filt <- nearzerovar_filtering(filt_colon_asv_tab,
+                                   filt_colon_taxa_tab,
+                                   filt_colon_metadata)
+
+filt_colon_asv_tab <- data_filt[[1]]
+filt_colon_taxa_tab <- data_filt[[2]]
+nearzero_step <- dim(filt_colon_asv_tab)[1]
+```
+
+*Check zero depth*
+
+```{r}
+data_filt <- check_zero_depth(filt_colon_asv_tab, 
+                              filt_colon_taxa_tab, 
+                              filt_colon_metadata)
+
+filt_colon_asv_tab <- data_filt[[1]]; 
+filt_colon_taxa_tab <- data_filt[[2]]; 
+filt_colon_metadata <- data_filt[[3]]; 
+```
+
 
 # DYSBIOSIS INDEX
 
 ## Ileum
 
+**All indices**
+
 ```{r,fig.width=12, fig.height=4}
-metadata_ileum_melted <- melt(metadata_ileum %>% dplyr::select("Group", "dys_unfiltered_asv","dys_unfiltered_genus","dys_filtered_asv","dys_filtered_genus"))
+metadata_ileum_melted <- melt(metadata_ileum %>% 
+                                dplyr::select("Group", 
+                                              "dys_unfiltered_asv",
+                                              "dys_unfiltered_genus",
+                                              "dys_filtered_asv",
+                                              "dys_filtered_genus"))
+
 p_il <- ggplot(metadata_ileum_melted) + 
   geom_boxplot(aes(x=Group, y=value),outliers = FALSE) + 
-    geom_jitter(width = 0.2,height = 0,aes(x=Group, y=value, color=Group),size=2) +
+  geom_jitter(width = 0.2,height = 0,aes(x=Group, y=value, color=Group), 
+              size=2) +
   facet_wrap(~variable, ncol = 4,scales = "free") + 
-  theme_bw() + 
-  scale_fill_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
-scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000"))
+  theme_minimal() + 
+ theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
+  scale_fill_manual(values=c("#309f87","#f9c675","#F08080","#A00000")) + 
+  scale_color_manual(values=c("#309f87","#f9c675","#F08080","#A00000"))
+
 p_il    
 ```
+
+**FILTERED GENUS**
 
 ```{r}
 dys_limit <- max(metadata_ileum$dys_filtered_genus,na.rm = TRUE) + 0.6*max(metadata_ileum$dys_filtered_genus,na.rm = TRUE)
 dys_min_limit <-  min(metadata_ileum$dys_filtered_genus)
 
-metadata_ileum$Group <- factor(metadata_ileum$Group,
-                               levels=c("healthy","pre_ltx","non-rPSC","rPSC"))
-p_il_dys_genus <- ggplot(metadata_ileum %>% mutate(`MDI`=dys_filtered_genus)) + 
-  geom_boxplot(aes(x=Group, y=`MDI`),outliers = FALSE) + 
-    geom_jitter(width = 0.3,height = 0,aes(x=Group, y=`MDI`, color=Group,shape=Country),size=1.5) +
-  theme_bw() + 
+p_il_dys_genus <- ggplot(metadata_ileum %>%
+                           mutate(`MDI`=dys_filtered_genus)) + 
+  geom_boxplot(aes(x=Group, y=`MDI`),
+               outliers = FALSE) + 
+  geom_jitter(width = 0.3,height = 0,
+              aes(x=Group, y=`MDI`, color=Group,shape=Country),
+              size=1.5) +
+  theme_minimal() + 
+ theme(panel.border = element_rect(color = "black", fill = NA, size = 0))  + 
   ylim(dys_min_limit,dys_limit) + 
   scale_fill_manual(values=c("#309f87","#f9c675","#F08080","#A00000")) + 
-scale_color_manual(values=c("#309f87","#f9c675","#F08080","#A00000")) + 
+  scale_color_manual(values=c("#309f87","#f9c675","#F08080","#A00000")) + 
   theme(axis.text.x = element_text(angle = 45,face = "bold",vjust = 0.5))
+
 p_il_dys_genus
+```
+
+```{r,results='hide'}
+pdf("../figures/clinical/MDI_terminal_ileum.pdf",
+    height =5,width = 5)
+p_il_dys_genus
+dev.off()
+```
+
+### AUC
+
+
+```{r}
+comparisons <- combn(unique(metadata_ileum$Group), 2, simplify = TRUE)
+
+comparisons <- comparisons[,c(3,2,1,6,5,4)]
+  
+auc_df <- data.frame(Comparison=rep(NA,ncol(comparisons)),
+                     AUC=rep(NA,ncol(comparisons)))
+
+roc_curve_list <- list()
+roc_curve_data_list <- list()
+
+for (i in 1:ncol(comparisons)){
+  name <- paste0(comparisons[1,i]," vs ", comparisons[2,i])
+  metadata_sub <- subset(metadata_ileum,metadata_ileum$Group %in% comparisons[,i])
+  metadata_sub$Group <- factor(metadata_sub$Group,
+                               levels=c(comparisons[1,i],comparisons[2,i]))
+  roc_curve_data <- roc(metadata_sub$Group, metadata_sub$dys_unfiltered_genus) 
+  auc_value <- auc(roc_curve_data)  # Compute AUC
+  auc_df[i,] <- c(name,auc_value)
+  roc_curve_list[[name]] <- ggroc(roc_curve_data) + 
+    theme_minimal() + 
+    theme(legend.position = "none") + 
+    ggtitle(paste0(name,' (AUC = ', round(auc_value,2))) + 
+    theme(plot.title = element_text(size = 7))
+  roc_curve_data_list[[name]] <- roc_curve_data
+}
+
+auc_df
+roc_ileum <- roc_curve_all(roc_curve_data_list)
+roc_ileum
+```
+
+```{r,results='hide'}
+pdf("../figures/clinical/MDI_ROC_terminal_ileum.pdf",
+    height =5,width = 7)
+roc_ileum
+dev.off()
 ```
 
 ## Colon
 
+**All indices**
+
 ```{r,fig.width=12, fig.height=4}
-colon_metadata_melted <- melt(metadata_colon %>% dplyr::select("Group", "dys_unfiltered_asv","dys_unfiltered_genus","dys_filtered_asv","dys_filtered_genus"))
+colon_metadata_melted <- melt(metadata_colon %>% 
+                                dplyr::select("Group", 
+                                              "dys_unfiltered_asv",
+                                              "dys_unfiltered_genus",
+                                              "dys_filtered_asv",
+                                              "dys_filtered_genus"))
 p_col <- ggplot(colon_metadata_melted) + 
   geom_boxplot(aes(x=Group, y=value),outliers = FALSE) + 
-    geom_jitter(width = 0.2,height = 0,aes(x=Group, y=value, color=Group),size=2) +
+  geom_jitter(width = 0.2,height = 0,
+              aes(x=Group, y=value, color=Group),
+              size=2) +
   facet_wrap(~variable, ncol = 4,scales = "free") + 
-  theme_bw() + 
-  scale_fill_manual(values=c("#309f87","#F08080","#f9c675","#A00000")) + 
-scale_color_manual(values=c("#309f87","#F08080","#f9c675","#A00000"))
+  theme_minimal() + 
+ theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) +
+  scale_fill_manual(values=c("#309f87","#f9c675","#F08080","#A00000")) + 
+  scale_color_manual(values=c("#309f87","#f9c675","#F08080","#A00000"))
+
 p_col  
 ```
+
+**FILTERED GENUS**
+
 ```{r}
 dys_limit <- max(metadata_colon$dys_filtered_genus,na.rm = TRUE) + 0.6*max(metadata_colon$dys_filtered_genus,na.rm = TRUE)
 dys_min_limit <-  min(metadata_colon$dys_filtered_genus)
 
-metadata_colon$Group <- factor(metadata_colon$Group,
-                               levels=c("healthy","pre_ltx","non-rPSC","rPSC"))
-p_col_dys_genus <- ggplot(metadata_colon %>% mutate(`MDI`=dys_filtered_genus)) + 
+p_col_dys_genus <- ggplot(metadata_colon %>%
+                            mutate(`MDI`=dys_filtered_genus)) + 
   geom_boxplot(aes(x=Group, y=`MDI`),outliers = FALSE) + 
-    geom_jitter(width = 0.3,height = 0,aes(x=Group, y=`MDI`, color=Group,shape=Country),size=1) +
-  theme_bw() + 
+  geom_jitter(width = 0.3,height = 0,
+              aes(x=Group, y=`MDI`, color=Group,shape=Country),
+              size=1) +
+  theme_minimal() + 
+ theme(panel.border = element_rect(color = "black", fill = NA, size = 0))+
   ylim(dys_min_limit,dys_limit) + 
   scale_fill_manual(values=c("#309f87","#f9c675","#F08080","#A00000")) + 
-scale_color_manual(values=c("#309f87","#f9c675","#F08080","#A00000")) + 
+  scale_color_manual(values=c("#309f87","#f9c675","#F08080","#A00000")) + 
   theme(axis.text.x = element_text(angle = 45,face = "bold",vjust = 0.5))
+
 p_col_dys_genus
 ```
-## Summary
+
+```{r,results='hide'}
+pdf("../figures/clinical/MDI_colon.pdf",
+    height =5,width = 5)
+p_col_dys_genus
+dev.off()
+```
+
+### AUC
 
 ```{r}
-results_model <- pairwise.lm(formula = "dys_filtered_genus ~ Group * Country",
-                                     factors=metadata_ileum$Group,
-                                     data=metadata_ileum)
+metadata_colon_auc <- metadata_colon %>%
+  group_by(PatientID) %>%
+  distinct(PatientID, .keep_all = TRUE) %>%
+  as.data.frame()
 
-results_model[[1]][c(1,4,7,10,13,16),c("Estimate", "p.adj","sig")]
+comparisons <- combn(unique(metadata_colon_auc$Group), 2, simplify = TRUE)
+comparisons <- comparisons[,c(3,2,1,6,5,4)]
+
+auc_df <- data.frame(Comparison=rep(NA,ncol(comparisons)),
+                     AUC=rep(NA,ncol(comparisons)))
+
+roc_curve_list <- list()
+roc_curve_data_list <- list()
+
+for (i in 1:ncol(comparisons)){
+  name <- paste0(comparisons[1,i]," vs ", comparisons[2,i])
+  metadata_sub <- subset(metadata_colon_auc,metadata_colon_auc$Group %in% comparisons[,i])
+  metadata_sub$Group <- factor(metadata_sub$Group,
+                               levels=c(comparisons[1,i],comparisons[2,i]))
+  roc_curve_data <- roc(metadata_sub$Group, metadata_sub$dys_unfiltered_genus) 
+  auc_value <- auc(roc_curve_data)  # Compute AUC
+  auc_df[i,] <- c(name,auc_value)
+  roc_curve_list[[name]] <- ggroc(roc_curve_data) + 
+    theme_minimal() + 
+    theme(legend.position = "none") + 
+    ggtitle(paste0(name,' (AUC = ', round(auc_value,2),")")) + 
+    theme(plot.title = element_text(size = 7))
+  roc_curve_data_list[[name]] <- roc_curve_data
+}
+
+auc_df
+roc_colon <- roc_curve_all(roc_curve_data_list)
+roc_colon
+```
+
+```{r,results='hide'}
+pdf("../figures/clinical/MDI_ROC_colon.pdf",
+    height =5,width = 7)
+roc_colon
+dev.off()
+```
+
+
+## Linear models
+
+**Ileum**
+
+```{r}
+results_model <- pairwise.lm(
+  formula = "dys_filtered_genus ~ Group * Country",
+  factors=metadata_ileum$Group,
+  data=metadata_ileum)
+
+knitr::kable(results_model[[1]][,c("Estimate", "p.adj","sig")],
+             digits=3,caption="Results of linear modeling")
 ```
 
 ```{r}
@@ -349,121 +840,258 @@ results_model <- pairwise.lmer(
   factors=metadata_colon$Group,
   data=metadata_colon)
 
-results_model[[1]][c(1,4,7,10,13,16),c("Estimate", "p.adj","sig")]
+knitr::kable(results_model[[1]][,c("Estimate", "p.adj","sig")],
+             digits=3,caption="Results of linear mixed-effect modeling")
 
 ```
 
 
 ```{r, eval=FALSE}
-dys <- ggarrange(p_il + ggtitle("Ileum"),p_col + ggtitle("Colon"),nrow = 2)
-pdf("results/clinical/dysbiosis_index_boxplots.pdf",height = 8,width =15)
+dys <- ggarrange(p_il + ggtitle("Ileum"),
+                 p_col + ggtitle("Colon"),nrow = 2)
+
+pdf("results/clinical/dysbiosis_index_boxplots.pdf",
+    height = 8,width =15)
+
 dys
 dev.off()
-
 ```
 
 # ALPHA DIVERSITY
 
 ```{r}
-ileum_metadata_alpha_final <- metadata_ileum %>% dplyr::select("SampleID", "PatientID", "Group","Richness","Shannon","Simpson","Pielou",
-                                                          "dys_filtered_asv","dys_filtered_genus")
-
-colon_metadata_alpha_final <- metadata_colon %>% dplyr::select("SampleID", "PatientID", "Group","Richness","Shannon","Simpson","Pielou",
-                                                               "dys_filtered_asv","dys_filtered_genus")
-
 alpha_div_plots <- list()
 alpha_boxplots <- list()
 corrs <- list()
 ```
 
+## Ileum
+
 ```{r}
-variables <- c("Richness","Shannon","Simpson","Pielou")
+ileum_metadata_alpha_final <- metadata_ileum %>% 
+  dplyr::select("SampleID", "PatientID","Group","Country",
+                "Observe","Shannon","Simpson","Pielou",
+                "dys_filtered_asv", "dys_filtered_genus")
+```
+
+```{r}
+variables <- c("Observe","Shannon","Simpson","Pielou")
 
 for (clinical_variable in variables){
-
+  
+  # ILEUM
   # boxplot
   p <- clinical_boxplot(ileum_metadata_alpha_final,
                       variable=clinical_variable)
 
   alpha_boxplots[[paste0("ileum_",clinical_variable)]] <- p
   
-  # ILEUM
   # correlation
-  
   ## ASV
   level="ASV"
-  corr <- clinical_correlation(ileum_metadata_alpha_final,clinical_variable,level)
+  corr <- clinical_correlation(
+    ileum_metadata_alpha_final,
+    clinical_variable,
+    level)
+  
   corrs[[paste0("ileum_asv_",clinical_variable)]] <- corr
   
-  p <- clinical_scatter(corr,ileum_metadata_alpha_final,clinical_variable,level)
+  p <- clinical_scatter(corr,
+                        ileum_metadata_alpha_final,
+                        clinical_variable,
+                        level)
+  
   alpha_div_plots[[paste0("ileum_asv_",clinical_variable)]] <- p
 
   ## Genus
   level="genus"
-  corr <- clinical_correlation(ileum_metadata_alpha_final,clinical_variable,level)
+  corr <- clinical_correlation(ileum_metadata_alpha_final,
+                               clinical_variable,
+                               level)
   corrs[[paste0("ileum_genus_",clinical_variable)]] <- corr
   
-  p <- clinical_scatter(corr,ileum_metadata_alpha_final,clinical_variable,level)
-  alpha_div_plots[[paste0("ileum_genus_",clinical_variable)]] <- p
+  p <- clinical_scatter(corr,
+                        ileum_metadata_alpha_final,
+                        clinical_variable,
+                        level)
   
+  alpha_div_plots[[paste0("ileum_genus_",clinical_variable)]] <- p
+}
+```
+
+### Boxplot
+
+```{r,fig.width=12, fig.height=4}
+alpha_boxplots_ileum <- ggarrange(
+  plotlist = alpha_boxplots[grepl("ileum",names(alpha_boxplots))],
+  ncol = 4,
+  common.legend = TRUE, 
+  legend = "right")
+
+alpha_boxplots_ileum
+```
+
+
+## Colon
+
+```{r}
+colon_metadata_alpha_final <- metadata_colon %>% 
+  dplyr::select("SampleID", "PatientID", "Group","Country",
+                "Observe","Shannon","Simpson","Pielou",
+                "dys_filtered_asv","dys_filtered_genus")
+```
+
+```{r}
+variables <- c("Observe","Shannon","Simpson","Pielou")
+
+for (clinical_variable in variables){
+
   # COLUMN
   p <- clinical_boxplot(colon_metadata_alpha_final,
-                      variable=clinical_variable)
+                        variable=clinical_variable)
 
   alpha_boxplots[[paste0("colon_",clinical_variable)]] <- p
-  # correlation
   
+  # correlation
   ## ASV
   level="ASV"
-  corr <- clinical_correlation(colon_metadata_alpha_final,clinical_variable,level,
+  corr <- clinical_correlation(colon_metadata_alpha_final,
+                               clinical_variable,
+                               level,
                                segment="colon")
+  
   corrs[[paste0("colon_asv_",clinical_variable)]] <- corr
   
-  p <- clinical_scatter(corr,colon_metadata_alpha_final,clinical_variable,level)
+  p <- clinical_scatter(corr,
+                        colon_metadata_alpha_final,
+                        clinical_variable,
+                        level)
+  
   alpha_div_plots[[paste0("colon_asv_",clinical_variable)]] <- p
 
   ## Genus
   level="genus"
-  corr <- clinical_correlation(colon_metadata_alpha_final,clinical_variable,level,
+  corr <- clinical_correlation(colon_metadata_alpha_final,
+                               clinical_variable,
+                               level,
                                segment="colon")
+  
   corrs[[paste0("colon_genus_",clinical_variable)]] <- corr
   
-  p <- clinical_scatter(corr,colon_metadata_alpha_final,clinical_variable,level)
+  p <- clinical_scatter(corr,
+                        colon_metadata_alpha_final,
+                        clinical_variable,
+                        level)
+  
   alpha_div_plots[[paste0("colon_genus_",clinical_variable)]] <- p
 }
+
 ```
 
-## Summary 
+### Boxplot
+
+```{r,fig.width=12, fig.height=4}
+alpha_boxplots_colon <- ggarrange(
+  plotlist = alpha_boxplots[grepl("colon",names(alpha_boxplots))],
+  ncol = 4,
+  common.legend = TRUE, 
+  legend = "right")
+
+alpha_boxplots_colon
+```
+
+```{r, eval=FALSE}
+alpha_boxplot <- ggarrange(alpha_boxplots_ileum,
+                           alpha_boxplots_colon,
+                           nrow = 2)
+pdf("results/clinical/alpha_diversity_boxplots.pdf",height = 7,width =17)
+alpha_boxplot
+dev.off()
+```
+
+## Scatterplots
+
+**ASV**
+
+```{r,fig.width=20, fig.height=8}
+alpha_dys_asv <- ggarrange(
+  plotlist = alpha_div_plots[grepl("asv",names(alpha_div_plots))],
+  ncol=4,
+  nrow=2,
+  common.legend = TRUE,
+  legend="right")
+
+alpha_dys_asv
+```
+
+**Genus**
+
+```{r,fig.width=20, fig.height=8}
+alpha_dys_genus <- ggarrange(
+  plotlist = alpha_div_plots[grepl("genus",names(alpha_div_plots))],
+  ncol=4,
+  nrow=2,
+  common.legend = TRUE,
+  legend="right")
+
+alpha_dys_genus
+```
+
+**Saving plots**
+
+```{r, eval=FALSE}
+pdf("results/clinical/alpha_diversity.pdf",height = 8,width =18)
+alpha_dys_asv
+dev.off()
+```
+
+```{r, eval=FALSE}
+pdf("results/clinical/alpha_diversity_genus.pdf",height = 8,width =18)
+alpha_dys_genus
+dev.off()
+```
+
+## Linear models
 
 ### Richness
 
+**Ileum**
+
 ```{r}
-results_model <- pairwise.lm(formula = "Richness ~ Group * Country",
+results_model <- pairwise.lm(formula = "Observe ~ Group * Country",
                                      factors=metadata_ileum$Group,
                                      data=metadata_ileum)
 
-results_model[[1]][c(1,4,7,10,13,16),c("Estimate", "p.adj","sig")]
+knitr::kable(results_model[[1]][,c("Estimate", "p.adj","sig")],
+             digits=3,caption="Results of linear modeling")
 ```
+
+**Colon**
 
 ```{r}
 results_model <- pairwise.lmer(
-  formula = "Richness ~ Group * Country + (1|Patient)",
+  formula = "Observe ~ Group * Country + (1|Patient)",
   factors=metadata_colon$Group,
   data=metadata_colon %>% mutate(Patient=PatientID))
 
-results_model[[1]][c(1,4,7,10,13,16),c("Estimate", "p.adj","sig")]
+knitr::kable(results_model[[1]][,c("Estimate", "p.adj","sig")],
+             digits=3,caption="Results of linear modeling")
 ```
 
 ### Shannon
 
+**Ileum**
 
 ```{r}
 results_model <- pairwise.lm(formula = "Shannon ~ Group * Country",
                                      factors=metadata_ileum$Group,
                                      data=metadata_ileum)
 
-results_model[[1]][c(1,4,7,10,13,16),c("Estimate", "p.adj","sig")]
+knitr::kable(results_model[[1]][,c("Estimate", "p.adj","sig")],
+             digits=3,caption="Results of linear modeling")
 ```
+
+**Colon**
 
 ```{r}
 results_model <- pairwise.lmer(
@@ -471,63 +1099,74 @@ results_model <- pairwise.lmer(
   factors=metadata_colon$Group,
   data=metadata_colon %>% mutate(Patient=PatientID))
 
-results_model[[1]][c(1,4,7,10,13,16),c("Estimate", "p.adj","sig")]
+knitr::kable(results_model[[1]][,c("Estimate", "p.adj","sig")],
+             digits=3,caption="Results of linear modeling")
 ```
+
+# MDI and alpha diversity plot 
 
 
 ```{r}
+terminal_ileum_list <- list(
+  ileum_genus_mdi_boxplot=p_il_dys_genus,
+  ileum_genus_observe=                          alpha_div_plots[grepl("ileum_genus",names(alpha_div_plots))][[1]],
+  ileum_genus_shannon=alpha_div_plots[grepl("ileum_genus",names(alpha_div_plots))][[2]],
+  ileum_roc=roc_ileum
+  )
+  
+p_terminal_ileum <- ggarrange(
+  plotlist = terminal_ileum_list,
+  ncol=1,
+  nrow=4)
 
-alpha_boxplots_ileum <- ggarrange(plotlist = alpha_boxplots[grepl("ileum",names(alpha_boxplots))],ncol = 4)
+colon_list <- list(
+  colon_genus_mdi_boxplot=p_col_dys_genus,
+  colon_genus_observe=                          alpha_div_plots[grepl("colon_genus",names(alpha_div_plots))][[1]],
+  colon_genus_shannon=alpha_div_plots[grepl("colon_genus",names(alpha_div_plots))][[2]],
+  colon_roc=roc_colon
+  )
+  
+p_colon <- ggarrange(
+  plotlist = colon_list,
+  ncol=1,
+  nrow=4)
 
-alpha_boxplots_colon <- ggarrange(plotlist = alpha_boxplots[grepl("colon",names(alpha_boxplots))],ncol=4)
-
+p <- ggarrange(p_terminal_ileum,p_colon,ncol=2,common.legend = TRUE,
+  legend="right")
 ```
 
-```{r, eval=TRUE}
-alpha_boxplot <- ggarrange(alpha_boxplots_ileum,alpha_boxplots_colon,nrow = 2)
-pdf("results/clinical/alpha_diversity_boxplots.pdf",height = 7,width =17)
-alpha_boxplot
+```{r,fig.width=10,fig.height=10}
+p
+```
+
+```{r,results='hide'}
+pdf("../figures/clinical/mdi_all.pdf",
+    height =12,width = 10)
+p
 dev.off()
-
 ```
 
-
-```{r, eval=TRUE}
-alpha_dys_asv <- ggarrange(plotlist = alpha_div_plots[grepl("asv",names(alpha_div_plots))],
-          ncol=4,nrow=2)
-pdf("results/clinical/alpha_diversity.pdf",height = 8,width =18)
-alpha_dys_asv
-dev.off()
-
-```
-```{r, eval=FALSE}
-alpha_dys_genus <- ggarrange(plotlist = alpha_div_plots[grepl("genus",names(alpha_div_plots))],
-          ncol=4,nrow=2)
-pdf("results/clinical/alpha_diversity_genus.pdf",height = 8,width =18)
-alpha_dys_genus
-dev.off()
-
-```
+# MDI and clinical variables
 
 ```{r}
-alpha_dys_genus_richness_ileum <- alpha_div_plots$ileum_genus_Richness + xlab("MDI")
-alpha_dys_genus_shannon_ileum <- alpha_div_plots$ileum_genus_Shannon + xlab("MDI")
-```
 
-```{r}
-alpha_dys_genus_richness_colon <- alpha_div_plots$colon_genus_Richness + xlab("MDI")
-alpha_dys_genus_shannon_colon <- alpha_div_plots$colon_genus_Shannon + xlab("MDI")
-```
+variables <- c("ALP","log_ALP",
+               "GGT","log_GGT",
+               "ALT","log_ALT",
+               "AST","log_AST",
+               "Bilirubin","log_Bilirubin",
+               "INR","log_INR",
+               "Albumin",
+               "Platelets",
+               "Creatinine","log_Creatinine",
+               "FIB4","log_FIB4",
+               "APRI","log_APRI",
+               "MAYO_PSC",
+               "AOM",
+               "Calprotectin","log_Calprotectin",
+"Nancy_max","eMAYO","MAYO_dai")
 
-# Clinical data
 
-```{r}
-variables <- c("Bilirubin","log_Bilirubin",
-               "ALP","log_ALP",
-               "Fecal.calprotectin","log_Fecal.calprotectin",
-               "MAYO_PSC","AOM_score", 
-               "APRI_score","log_APRI_score", 
-               "FIB4_score","log_FIB4_score")
 ```
 
 
@@ -535,6 +1174,10 @@ variables <- c("Bilirubin","log_Bilirubin",
 boxplots_plots <- list()
 corrs <- list()
 clinical_plots <- list()
+
+
+#metadata_ileum %<>% dplyr::filter(Group!="healthy")
+#metadata_colon %<>% dplyr::filter(Group!="healthy")
 
 for (clinical_variable in variables){
   
@@ -556,75 +1199,68 @@ for (clinical_variable in variables){
   
   ## ASV
   level="ASV"
-  corr <- clinical_correlation(metadata_ileum,clinical_variable,level)
+  corr <- clinical_correlation(metadata_ileum,
+                               clinical_variable,
+                               level)
+  
   corrs[[paste0("ileum_asv_",clinical_variable)]] <- corr
   
-  p <- clinical_scatter(corr,metadata_ileum,clinical_variable,level)
+  p <- clinical_scatter(corr,
+                        metadata_ileum,
+                        clinical_variable,
+                        level)
   clinical_plots[[paste0("ileum_asv_",clinical_variable)]] <- p
 
   ## Genus
   level="genus"
-  corr <- clinical_correlation(metadata_ileum,clinical_variable,level)
+  corr <- clinical_correlation(metadata_ileum,
+                               clinical_variable,
+                               level)
   corrs[[paste0("ileum_genus_",clinical_variable)]] <- corr
   
-  p <- clinical_scatter(corr,metadata_ileum,clinical_variable,level)
+  p <- clinical_scatter(corr,
+                        metadata_ileum,
+                        clinical_variable,
+                        level)
   clinical_plots[[paste0("ileum_genus_",clinical_variable)]] <- p
   
   # correlation
-  
   ## ASV
   level="ASV"
-  corr <- clinical_correlation(metadata_colon,clinical_variable,level,
+  corr <- clinical_correlation(metadata_colon,
+                               clinical_variable,
+                               level,
                                segment="colon")
+  
   corrs[[paste0("colon_asv_",clinical_variable)]] <- corr
   
-  p <- clinical_scatter(corr,metadata_colon,clinical_variable,level)
+  p <- clinical_scatter(corr,
+                        metadata_colon,
+                        clinical_variable,
+                        level)
+  
   clinical_plots[[paste0("colon_asv_",clinical_variable)]] <- p
 
   ## Genus
   level="genus"
-  corr <- clinical_correlation(metadata_colon,clinical_variable,level,
+  corr <- clinical_correlation(metadata_colon,
+                               clinical_variable,
+                               level,
                                segment="colon")
+  
   corrs[[paste0("colon_genus_",clinical_variable)]] <- corr
   
-  p <- clinical_scatter(corr,metadata_colon,clinical_variable,level)
+  p <- clinical_scatter(corr,
+                        metadata_colon,
+                        clinical_variable,
+                        level)
+  
   clinical_plots[[paste0("colon_genus_",clinical_variable)]] <- p
 }
 
 ```
 
-```{r}
-variables <- c("Nancy_max","eMAYO","MAYO_dai")
-```
-
-```{r}
-for (clinical_variable in variables){
-  # CONTINGENCY TABLE
-  p <- clinical_contingency(metadata_for_boxplots,clinical_variable)
-  boxplots_plots[[clinical_variable]] <- p
-  
-  # ILEUM
-  ## ASV
-  p <- clinical_boxplot_categorical(metadata_ileum,clinical_variable,level = "ASV")
-  clinical_plots[[paste0("ileum_asv_",clinical_variable)]] <- p
-  
-  ## GENUS
-  p <- clinical_boxplot_categorical(metadata_ileum,clinical_variable,level = "Genus")
-  clinical_plots[[paste0("ileum_genus_",clinical_variable)]] <- p
-  
-  # COLON
-  ## ASV
-  p <- clinical_boxplot_categorical(metadata_ileum,clinical_variable,level = "ASV")
-  clinical_plots[[paste0("colon_asv_",clinical_variable)]] <- p
-  
-  ## GENUS
-  p <- clinical_boxplot_categorical(metadata_ileum,clinical_variable,level = "Genus")
-  clinical_plots[[paste0("colon_genus_",clinical_variable)]] <- p
-}
-
-```
-
-## Summary
+## Boxplots
 
 ```{r}
 for (i in 1:length(boxplots_plots)){
@@ -633,15 +1269,20 @@ for (i in 1:length(boxplots_plots)){
   pl <- pl + ggtitle(name)
   boxplots_plots[[i]] <- pl
 }
+bx <- ggarrange(plotlist = boxplots_plots, ncol = 4,nrow=5)
 ```
 
-```{r, eval=TRUE}
-bx <- ggarrange(plotlist = boxplots_plots, ncol = 3,nrow=5)
-pdf("results/clinical/clinical_data_boxplots.pdf",height = 15,width =13)
+```{r,fig.width=15, fig.height=12}
+bx
+```
+
+```{r, eval=FALSE}
+pdf("clinical_data_boxplots.pdf",height = 15,width =18)
 bx
 dev.off()
-
 ```
+
+## Clinical plots - MDI ~ clinical variable
 
 ```{r}
 for (i in 1:length(clinical_plots)){
@@ -650,589 +1291,165 @@ for (i in 1:length(clinical_plots)){
   pl <- pl + ggtitle(name)
   clinical_plots[[i]] <- pl
 }
+
+cl_asv <- ggarrange(
+  plotlist = clinical_plots[grepl("asv",names(clinical_plots))],
+  ncol=4,nrow=8)
+
+cl_genus <- ggarrange(plotlist = clinical_plots[grepl("genus",names(clinical_plots))],
+          ncol=4,nrow=8)
+
 ```
 
+```{r,fig.width=20, fig.height=22}
+cl_asv
+```
 
-```{r, eval=TRUE}
-cl_asv <- ggarrange(plotlist = clinical_plots[grepl("asv",names(clinical_plots))],
-          ncol=4,nrow=8)
+```{r,fig.width=20, fig.height=22}
+cl_genus
+```
+
+```{r, eval=FALSE}
 pdf("results/clinical/correlation.pdf",height = 22,width =18)
 cl_asv
 dev.off()
-
 ```
 
 
-```{r, eval=TRUE}
-cl_genus <- ggarrange(plotlist = clinical_plots[grepl("genus",names(clinical_plots))],
-          ncol=4,nrow=8)
+```{r, eval=FALSE}
 pdf("results/clinical/correlation_genus.pdf",height = 22,width =18)
 cl_genus
 dev.off()
 
 ```
 
-# Oher clinical data
+## HEATMAP
+
+### ASV level
 
 ```{r}
-other_variables <- c("Albumin","Platelets","INR","Creatinine","log_Creatinine", "Na",
-                     "ALT","log_ALT",
-                     "AST","log_AST",
-                     "GGT","log_GGT")
+corrs_ileum <- corrs[grepl("ileum_asv",names(corrs))]
+corrs_colon <- corrs[grepl("colon_asv",names(corrs))]
 ```
 
-
-```{r, fig.width=5, fig.height=3}
-boxplots_plots_other <- list()
-corrs <- list()
-clinical_plots_other <- list()
-
-for (clinical_variable in other_variables){
-  
-  if (grepl("log_",clinical_variable)) {
-   metadata_for_boxplots[,clinical_variable] <- log(metadata_for_boxplots[,gsub("log_","",clinical_variable)])
-   
-   metadata_ileum[,clinical_variable] <- log(metadata_ileum[,gsub("log_","",clinical_variable)])
-   metadata_colon[,clinical_variable] <- log(metadata_colon[,gsub("log_","",clinical_variable)])
-  }
-  
-  # ILEUM
-  # boxplot
-  p <- clinical_boxplot(metadata_for_boxplots,
-                      variable=clinical_variable)
-
-  boxplots_plots_other[[clinical_variable]] <- p
-    
-  # correlation
-  
-  ## ASV
-  level="ASV"
-  corr <- clinical_correlation(metadata_ileum,clinical_variable,level)
-  corrs[[paste0("ileum_asv_",clinical_variable)]] <- corr
-  
-  p <- clinical_scatter(corr,metadata_ileum,clinical_variable,level)
-  clinical_plots_other[[paste0("ileum_asv_",clinical_variable)]] <- p
-
-  ## Genus
-  level="genus"
-  corr <- clinical_correlation(metadata_ileum,clinical_variable,level)
-  corrs[[paste0("ileum_genus_",clinical_variable)]] <- corr
-  
-  p <- clinical_scatter(corr,metadata_ileum,clinical_variable,level)
-  clinical_plots_other[[paste0("ileum_genus_",clinical_variable)]] <- p
-  
-  # correlation
-  
-  ## ASV
-  level="ASV"
-  corr <- clinical_correlation(metadata_colon,clinical_variable,level,
-                               segment="colon")
-  corrs[[paste0("colon_asv_",clinical_variable)]] <- corr
-  
-  p <- clinical_scatter(corr,metadata_colon,clinical_variable,level)
-  clinical_plots_other[[paste0("colon_asv_",clinical_variable)]] <- p
-
-  ## Genus
-  level="genus"
-  corr <- clinical_correlation(metadata_colon,clinical_variable,level,
-                               segment="colon")
-  corrs[[paste0("colon_genus_",clinical_variable)]] <- corr
-  
-  p <- clinical_scatter(corr,metadata_colon,clinical_variable,level)
-  clinical_plots_other[[paste0("colon_genus_",clinical_variable)]] <- p
-}
-
+```{r,fig.width=3,fig.height=7}
+prepared_list <- prepare_for_heatmap(corrs_ileum,corrs_colon)
+p_df_sig_mdi <- prepared_list[[1]]
+r_df_mdi <- prepared_list[[2]]
 ```
 
-## Summary
+```{r,fig.width=4,fig.height=7}
+r_df_melt_mdi <- melt(r_df_mdi %>% rownames_to_column("SeqID"))
+p_df_melt_mdi <- melt(p_df_sig_mdi %>% rownames_to_column("SeqID"),
+                      id.vars = c("SeqID"))
 
-```{r}
-for (i in 1:length(boxplots_plots_other)){
-  name <- names(boxplots_plots_other)[i]
-  pl <- boxplots_plots_other[[i]]
-  pl <- pl + ggtitle(name)
-  boxplots_plots_other[[i]] <- pl
-}
+r_df_melt_mdi$SeqID <- factor(r_df_melt_mdi$SeqID,
+                              levels=unique(r_df_melt_mdi$SeqID))
+
+p_df_melt_mdi$SeqID <- factor(p_df_melt_mdi$SeqID,
+                              levels=unique(p_df_melt_mdi$SeqID))
+
+r_df_melt_mdi$variable <- factor(r_df_melt_mdi$variable,
+                              levels=rev(unique(r_df_melt_mdi$variable)))
+
+p_df_melt_mdi$variable <- factor(p_df_melt_mdi$variable,
+                              levels=rev(unique(p_df_melt_mdi$variable)))
+
+p <- ggplot() + 
+  geom_tile(data=r_df_melt_mdi, aes(SeqID, variable, fill= value))  + 
+  theme_minimal() + 
+  scale_fill_gradient2(name = "Rho", low = "blue", mid = "white", high = "red", midpoint = 0,limits = c(-0.7, 0.7)) + 
+  geom_text(data=p_df_melt_mdi,aes(x=SeqID,y=variable,label=value,vjust=0.6)) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  xlab("") + ylab("")  + 
+  ggtitle("MDI")+ 
+  theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15))
+
+p
 ```
-
-```{r, eval=TRUE}
-bx <- ggarrange(plotlist = boxplots_plots_other, ncol = 4,nrow=3)
-pdf("results/clinical/clinical_data_boxplots_other.pdf",height = 9,width =15)
-bx
-dev.off()
-
-```
-
-```{r}
-for (i in 1:length(clinical_plots_other)){
-  name <- names(clinical_plots_other)[i]
-  pl <- clinical_plots_other[[i]]
-  pl <- pl + ggtitle(name)
-  clinical_plots_other[[i]] <- pl
-}
-```
-
-
-```{r, eval=TRUE}
-cl_asv <- ggarrange(plotlist = clinical_plots_other[grepl("asv",names(clinical_plots_other))],
-          ncol=4,nrow=6)
-pdf("results/clinical/correlation_other.pdf",height = 18,width =18)
-cl_asv
-dev.off()
-
-```
-
-
-```{r, eval=TRUE}
-cl_genus <- ggarrange(plotlist = clinical_plots_other[grepl("genus",names(clinical_plots_other))],
-          ncol=4,nrow=6)
-pdf("results/clinical/correlation_genus_other.pdf",height = 18,width =18)
-cl_genus
-dev.off()
-```
-
-# PCA
-
-## Ileum
-
-```{r}
-# Step 1: Standardize the data (if needed)
-metadata_ileum <- metadata_ileum[metadata_ileum$Country=="CZ",]
-data_matrix <- metadata_ileum %>% dplyr::select("Group", "Albumin","Shannon","Platelets","log_ALT","log_GGT","log_AST","log_ALP","log_Bilirubin","log_APRI_score","log_FIB4_score","dys_filtered_genus","log_Creatinine")
-
-imputed_data <- mice(data_matrix, 
-  m = 5, method = 'pmm', seed = 123)
-
-completed_data <- complete(imputed_data, 1)
-completed_data <- completed_data[,-1]
-
-scaled_data <- scale(completed_data)  # Standardize the data to have mean 0 and SD 1
-
-# Step 2: Perform PCA
-pca_result <- prcomp(scaled_data, center = TRUE, scale. = TRUE)  # Perform PCA
-pca_loadings <- as.data.frame(pca_result$rotation)  # Variable loadings
-pca_vec <- as.data.frame(pca_result$x)
-pca_vec$PC1 = pca_vec$PC1/(max(pca_vec$PC1) - min(pca_vec$PC1))
-pca_vec$PC2 = pca_vec$PC2/(max(pca_vec$PC2) - min(pca_vec$PC2))
-data_for_pca <- cbind(pca_vec,as.data.frame(data_matrix[,"Group"]))
-colnames(data_for_pca)[13] <- c("Group")
-xlab <- (paste("PC1 (", round(summary(pca_result)$importance[2, 1] * 100, 1), "%)", sep = "")) 
-ylab <- (paste("PC2 (", round(summary(pca_result)$importance[2, 2] * 100, 1), "%)", sep = "")) 
-    
-  
-colors <- c("#309f87","#425387","#f9c675","#d55c4a")
-p_il <- ggplot(data_for_pca) + 
-    geom_point(aes(x=PC1,y=PC2,color=Group),
-               show.legend = TRUE,size=3) + 
-  ggrepel::geom_text_repel(data = pca_loadings, aes(x = PC1, y = PC2, label = rownames(pca_loadings)), 
-            size = 3, color = "black") +
-  geom_segment(data = pca_loadings, aes(x = 0, y = 0, xend = PC1, yend = PC2),
-               arrow = arrow(type = "closed", length = unit(0.1, "inches")), 
-               color = "black") + 
-    #stat_ellipse(aes(x=pca_vec[,1],y=pca_vec[,2],color=!!sym(variable)),show.legend = FALSE) + 
-    xlab(xlab)+
-    ylab(ylab)+
-    theme_bw() + 
-    theme(legend.position = "right") + 
-    scale_color_manual(values=colors)
-p_il
-```
-
-## Colon
-
-```{r}
-# Step 1: Standardize the data (if needed)
-metadata_colon <- metadata_colon[metadata_colon$Country=="CZ",]
-data_matrix <- metadata_colon %>% dplyr::select("Group", "Albumin","Shannon","Platelets","log_ALT","log_GGT","log_AST","log_ALP","log_Bilirubin","log_APRI_score","log_FIB4_score","dys_filtered_genus","log_Creatinine")
-
-imputed_data <- mice(data_matrix, 
-  m = 5, method = 'pmm', seed = 123)
-
-completed_data <- complete(imputed_data, 1)
-completed_data <- completed_data[,-1]
-
-scaled_data <- scale(completed_data)  # Standardize the data to have mean 0 and SD 1
-
-# Step 2: Perform PCA
-pca_result <- prcomp(scaled_data, center = TRUE, scale. = TRUE)  # Perform PCA
-pca_loadings <- as.data.frame(pca_result$rotation)  # Variable loadings
-pca_loadings$importance <- rowSums(pca_loadings[, 1:2]^2)
-pca_vec <- as.data.frame(pca_result$x)
-pca_vec$PC1 = pca_vec$PC1/(max(pca_vec$PC1) - min(pca_vec$PC1))
-pca_vec$PC2 = pca_vec$PC2/(max(pca_vec$PC2) - min(pca_vec$PC2))
-data_for_pca <- cbind(pca_vec,as.data.frame(data_matrix[,"Group"]))
-colnames(data_for_pca)[13] <- c("Group")
-xlab <- (paste("PC1 (", round(summary(pca_result)$importance[2, 1] * 100, 1), "%)", sep = "")) 
-ylab <- (paste("PC2 (", round(summary(pca_result)$importance[2, 2] * 100, 1), "%)", sep = "")) 
-    
-  
-colors <- c("#309f87","#425387","#f9c675","#d55c4a")
-p_col <- ggplot(data_for_pca) + 
-    geom_point(aes(x=PC1,y=PC2,color=Group),
-               show.legend = TRUE,size=3) + 
-  ggrepel::geom_text_repel(data = pca_loadings, aes(x = PC1*1, y = PC2*1, label = rownames(pca_loadings)), 
-            size = 3, color = "black") +
-  geom_segment(data = pca_loadings, aes(x = 0, y = 0, xend = PC1, yend = PC2),
-               arrow = arrow(type = "closed", length = unit(0.1, "inches")), 
-               color = "black") + 
-    #stat_ellipse(aes(x=pca_vec[,1],y=pca_vec[,2],color=!!sym(variable)),show.legend = FALSE) + 
-    xlab(xlab)+
-    ylab(ylab)+
-    theme_bw() + 
-    theme(legend.position = "right") + 
-    scale_color_manual(values=colors)
-p_col
-```
-
-
-```{r, eval=TRUE}
-pca_plots <- ggarrange(p_il + ggtitle("Ileum"), p_col + ggtitle("Colon"), ncol = 2,nrow=1)
-pdf("results/clinical/pca_clinical_data.pdf",height = 4,width =10)
-pca_plots
-dev.off()
-
-```
-
-
-# PCA - PSC only
-
-## Ileum
-
-```{r}
-# Step 1: Standardize the data (if needed)
-metadata_ileum_psc <- metadata_ileum[metadata_ileum$Country=="CZ" & (metadata_ileum$Group %in% c("rPSC","non-rPSC","pre_ltx")),]
-data_matrix <- metadata_ileum_psc %>% dplyr::select("Group", "Albumin","Shannon","Platelets","log_ALT","log_GGT","log_AST","log_ALP","log_Bilirubin","log_APRI_score","log_FIB4_score","dys_filtered_genus","log_Creatinine","log_Fecal.calprotectin","AOM_score","Na","INR")
-
-imputed_data <- mice(data_matrix, 
-  m = 5, method = 'pmm', seed = 123)
-
-completed_data <- complete(imputed_data, 1)
-completed_data <- completed_data[,-1]
-
-scaled_data <- scale(completed_data)  # Standardize the data to have mean 0 and SD 1
-
-# Step 2: Perform PCA
-pca_result <- prcomp(scaled_data, center = TRUE, scale. = TRUE)  # Perform PCA
-pca_loadings <- as.data.frame(pca_result$rotation)  # Variable loadings
-pca_vec <- as.data.frame(pca_result$x)
-pca_vec$PC1 = pca_vec$PC1/(max(pca_vec$PC1) - min(pca_vec$PC1))
-pca_vec$PC2 = pca_vec$PC2/(max(pca_vec$PC2) - min(pca_vec$PC2))
-data_for_pca <- cbind(pca_vec,as.data.frame(data_matrix[,"Group"]))
-colnames(data_for_pca)[17] <- c("Group")
-xlab <- (paste("PC1 (", round(summary(pca_result)$importance[2, 1] * 100, 1), "%)", sep = "")) 
-ylab <- (paste("PC2 (", round(summary(pca_result)$importance[2, 2] * 100, 1), "%)", sep = "")) 
-    
-  
-colors <- c("#425387","#f9c675","#d55c4a")
-p_il <- ggplot(data_for_pca) + 
-    geom_point(aes(x=PC1,y=PC2,color=Group),
-               show.legend = TRUE,size=3) + 
-  ggrepel::geom_text_repel(data = pca_loadings, aes(x = PC1, y = PC2, label = rownames(pca_loadings)), 
-            size = 3, color = "black") +
-  geom_segment(data = pca_loadings, aes(x = 0, y = 0, xend = PC1, yend = PC2),
-               arrow = arrow(type = "closed", length = unit(0.1, "inches")), 
-               color = "black") + 
-    #stat_ellipse(aes(x=pca_vec[,1],y=pca_vec[,2],color=!!sym(variable)),show.legend = FALSE) + 
-    xlab(xlab)+
-    ylab(ylab)+
-    theme_bw() + 
-    theme(legend.position = "right") + 
-    scale_color_manual(values=colors)
-p_il
-```
-
-## Colon
-
-```{r}
-# Step 1: Standardize the data (if needed)
-metadata_colon_psc <- metadata_colon[metadata_colon$Country=="CZ" & (metadata_colon$Group %in% c("rPSC","non-rPSC","pre_ltx")),]
-data_matrix <- metadata_colon_psc %>% dplyr::select("Group", "Albumin","Shannon","Platelets","log_ALT","log_GGT","log_AST","log_ALP","log_Bilirubin","log_APRI_score","log_FIB4_score","dys_filtered_genus","log_Creatinine","log_Fecal.calprotectin","AOM_score","Na","INR")
-
-imputed_data <- mice(data_matrix, 
-  m = 5, method = 'pmm', seed = 123)
-
-completed_data <- complete(imputed_data, 1)
-completed_data <- completed_data[,-1]
-
-scaled_data <- scale(completed_data)  # Standardize the data to have mean 0 and SD 1
-
-# Step 2: Perform PCA
-pca_result <- prcomp(scaled_data, center = TRUE, scale. = TRUE)  # Perform PCA
-pca_loadings <- as.data.frame(pca_result$rotation)  # Variable loadings
-pca_loadings$importance <- rowSums(pca_loadings[, 1:2]^2)
-pca_vec <- as.data.frame(pca_result$x)
-pca_vec$PC1 = pca_vec$PC1/(max(pca_vec$PC1) - min(pca_vec$PC1))
-pca_vec$PC2 = pca_vec$PC2/(max(pca_vec$PC2) - min(pca_vec$PC2))
-data_for_pca <- cbind(pca_vec,as.data.frame(data_matrix[,"Group"]))
-colnames(data_for_pca)[17] <- c("Group")
-xlab <- (paste("PC1 (", round(summary(pca_result)$importance[2, 1] * 100, 1), "%)", sep = "")) 
-ylab <- (paste("PC2 (", round(summary(pca_result)$importance[2, 2] * 100, 1), "%)", sep = "")) 
-    
-  
-colors <- c("#425387","#f9c675","#d55c4a")
-p_col <- ggplot(data_for_pca) + 
-    geom_point(aes(x=PC1,y=PC2,color=Group),
-               show.legend = TRUE,size=3) + 
-  ggrepel::geom_text_repel(data = pca_loadings, aes(x = PC1*1, y = PC2*1, label = rownames(pca_loadings)), 
-            size = 3, color = "black") +
-  geom_segment(data = pca_loadings, aes(x = 0, y = 0, xend = PC1, yend = PC2),
-               arrow = arrow(type = "closed", length = unit(0.1, "inches")), 
-               color = "black") + 
-    #stat_ellipse(aes(x=pca_vec[,1],y=pca_vec[,2],color=!!sym(variable)),show.legend = FALSE) + 
-    xlab(xlab)+
-    ylab(ylab)+
-    theme_bw() + 
-    theme(legend.position = "right") + 
-    scale_color_manual(values=colors)
-p_col
-```
-
-
-```{r, eval=FALSE}
-pca_plots <- ggarrange(p_il + ggtitle("Ileum"), p_col + ggtitle("Colon"), ncol = 2,nrow=1)
-pdf("results/clinical/pca_clinical_data_psc.pdf",height = 4,width =10)
-pca_plots
-dev.off()
-
-```
-
-# Paper-ready figures
-
-```{r}
-dys_ileum <- ggarrange(p_il_dys_genus + xlab(""),
-          alpha_dys_genus_richness_ileum + xlab("MDI"),
-          alpha_dys_genus_shannon_ileum + xlab("MDI"), 
-          ncol=3, labels=LETTERS,common.legend = TRUE, legend="right",
-          widths =c(0.9,1,1,0.29)) + 
-  ggtitle("Terminal ileum")+ 
-  theme(plot.title = element_text(hjust=0.5,face = "bold",size = 20))
-
-dys_colon <- ggarrange(p_col_dys_genus + xlab(""),
-          alpha_dys_genus_richness_colon + xlab("MDI"),
-          alpha_dys_genus_shannon_colon + xlab("MDI"),
-          ggplot() + theme_minimal(),
-          ncol=4, labels = c("D","E","F",""),
-          widths =c(0.9,1,1,0.29), 
-          common.legend = TRUE, legend = "none") + 
-  ggtitle("Colon") + 
-  theme(plot.title = element_text(hjust=0.5,face = "bold",size = 20))
-
-dys_plot <- ggarrange(dys_ileum,dys_colon,nrow=2)
-
-# dys_plot <- ggarrange(p_il_dys_genus + ggtitle("MD-index"),
-#           alpha_dys_genus_richness_ileum + ggtitle("Richness"),
-#           alpha_dys_genus_shannon_ileum + ggtitle("Shannon"),
-#           p_col_dys_genus + ggtitle("MD-index"),
-#           alpha_dys_genus_richness_colon + ggtitle("Richness"),
-#           alpha_dys_genus_shannon_colon + ggtitle("Shannon"), 
-#           common.legend = TRUE, legend = "right", 
-#           labels=LETTERS)
-```
-
-
-```{r}
-pdf("results/clinical/FIGURE6_new.pdf",height = 8,width =12)
-dys_plot
-dev.off()
-```
-
-```{r}
-variables <- c("Bilirubin",
-               "ALP",
-               "Fecal.calprotectin",
-               "MAYO_PSC",
-               "AOM_score", 
-               "APRI_score",
-               "FIB4_score",
-               "Albumin",
-               "Platelets",
-               "INR",
-               "Creatinine",
-                     "ALT",
-                     "AST",
-                     "GGT",
-               "Nancy_max",
-               "eMAYO",
-               "MAYO_dai")
-```
-
-
-```{r, fig.width=5, fig.height=3}
-boxplots_plots <- list()
-corrs <- list()
-clinical_plots <- list()
-
-for (clinical_variable in variables){
-  
-  if (grepl("log_",clinical_variable)) {
-   metadata_for_boxplots[,clinical_variable] <- log(as.numeric(metadata_for_boxplots[,gsub("log_","",clinical_variable)]))
-   
-   metadata_ileum[,clinical_variable] <- log(as.numeric(metadata_ileum[,gsub("log_","",clinical_variable)]))
-   metadata_colon[,clinical_variable] <- log(as.numeric(metadata_colon[,gsub("log_","",clinical_variable)]))
-  }
-  
-  # boxplot
-  p <- clinical_boxplot(metadata_for_boxplots,
-                      variable=clinical_variable)
-
-  boxplots_plots[[clinical_variable]] <- p
-  
-  # ILEUM
-  # correlation
-  
-  ## ASV
-  level="ASV"
-  corr <- clinical_correlation(metadata_ileum,clinical_variable,level)
-  corrs[[paste0("ileum_asv_",clinical_variable)]] <- corr
-  
-  p <- clinical_scatter(corr,metadata_ileum,clinical_variable,level)
-  clinical_plots[[paste0("ileum_asv_",clinical_variable)]] <- p
-
-  ## Genus
-  level="genus"
-  corr <- clinical_correlation(metadata_ileum,clinical_variable,level)
-  corrs[[paste0("ileum_genus_",clinical_variable)]] <- corr
-  
-  p <- clinical_scatter(corr,metadata_ileum,clinical_variable,level)
-  clinical_plots[[paste0("ileum_genus_",clinical_variable)]] <- p
-  
-  # correlation
-  
-  ## ASV
-  level="ASV"
-  corr <- clinical_correlation(metadata_colon,clinical_variable,level,
-                               segment="colon")
-  corrs[[paste0("colon_asv_",clinical_variable)]] <- corr
-  
-  p <- clinical_scatter(corr,metadata_colon,clinical_variable,level)
-  clinical_plots[[paste0("colon_asv_",clinical_variable)]] <- p
-
-  ## Genus
-  level="genus"
-  corr <- clinical_correlation(metadata_colon,clinical_variable,level,
-                               segment="colon")
-  corrs[[paste0("colon_genus_",clinical_variable)]] <- corr
-  
-  p <- clinical_scatter(corr,metadata_colon,clinical_variable,level)
-  clinical_plots[[paste0("colon_genus_",clinical_variable)]] <- p
-}
-
-```
-
-```{r}
-dys_clinical <- ggarrange(ggplot() + theme_minimal() + 
-                            ggtitle("Terminal ileum") + 
-                            theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15)),
-                          ggplot() + theme_minimal() + 
-                            ggtitle("Colon") + 
-                            theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15)),
-                          clinical_plots$ileum_genus_log_ALP 
-                          + xlab("MD-index") 
-                          + ggtitle("log_ALP"),
-                       clinical_plots$colon_genus_log_ALP +
-                         xlab("MD-index") + 
-                         ggtitle("log_ALP"),
-                       clinical_plots$ileum_genus_log_GGT + 
-                         xlab("MD-index") +
-                         ggtitle("log_GGT"),
-                       clinical_plots$colon_genus_log_GGT + 
-                         xlab("MD-index") + 
-                         ggtitle("log_GGT"),
-                       clinical_plots$ileum_genus_log_APRI_score + 
-                          xlab("MD-index") + 
-                         ggtitle("log_APRI_score"),
-                       clinical_plots$colon_genus_log_APRI_score + 
-                          xlab("MD-index") + 
-                         ggtitle("log_APRI_score"),
-                       clinical_plots$ileum_genus_log_FIB4_score + 
-                          xlab("MD-index") + 
-                         ggtitle("log_FIB4_score"),
-                       clinical_plots$colon_genus_log_FIB4_score + 
-                         xlab("MD-index") +
-                         ggtitle("log_FIB4_score"),
-                       clinical_plots$ileum_genus_log_Albumin +
-                         xlab("MD-index") +
-                         ggtitle("log_Albumin"),
-                       clinical_plots$colon_genus_log_Albumin + 
-                         xlab("MD-index") +
-                         ggtitle("log_Albumin"),
-                       ncol=2,labels=c("","",LETTERS),common.legend = TRUE, legend="right",
-                       nrow=6,heights = c(0.1,rep(1,5)))
-  #theme(plot.title = element_text(hjust=0.5,face = "bold",size = 20))
-```
-
-```{r}
-pdf("results/clinical/FIGURE8.pdf",height = 15,width =8)
-dys_clinical
-dev.off()
-```
-
-# Correlations - genera vs clinical variables
-
-## Data Import
-
-Importing ASV, taxa and metadata tables for both czech and norway
-samples.
-
-
-```{r}
-asv_tab_ikem <- as.data.frame(fread("data/ikem/asv_table_ikem.csv",check.names = FALSE))
-taxa_tab_ikem <- as.data.frame(fread("data/ikem/taxa_table_ikem.csv",check.names = FALSE))
-metadata_ikem <- as.data.frame(fread("data/ikem/metadata_ikem.csv",check.names = FALSE))
-```
-
-### Terminal ileum
-
-```{r}
-asv_tab_ileum <- asv_tab_ikem[,c(TRUE,colnames(asv_tab_ikem)[-1] %in% metadata_ikem$SampleID[metadata_ikem$Matrix=="TI"])]
-
-ileum_metadata <- metadata_ikem[metadata_ikem$SampleID %in% colnames(asv_tab_ileum),]
-ileum_data <- data_check(asv_tab_ileum,taxa_tab_ikem)
-
-ileum_asv_tab <- ileum_data[[1]]
-ileum_taxa_tab <- ileum_data[[2]]
-```
-
-### Colon
-
-```{r}
-asv_tab_colon <- asv_tab_ikem[,c(TRUE,colnames(asv_tab_ikem)[-1] %in% metadata_ikem$SampleID[metadata_ikem$Matrix!="TI"])]
-
-colon_metadata <- metadata_ikem[metadata_ikem$SampleID %in% colnames(asv_tab_colon),]
-colon_data <- data_check(asv_tab_colon,taxa_tab_ikem)
-
-colon_asv_tab <- colon_data[[1]]
-colon_taxa_tab <- colon_data[[2]]
-```
-
-## Ileum
-
-
 
 ### Genus level
+
+```{r}
+corrs_ileum <- corrs[grepl("ileum_genus",names(corrs))]
+corrs_colon <- corrs[grepl("colon_genus",names(corrs))]
+```
+
+```{r}
+prepared_list <- prepare_for_heatmap(corrs_ileum,corrs_colon)
+p_df_sig_mdi <- prepared_list[[1]]
+r_df_mdi <- prepared_list[[2]]
+```
+
+```{r,fig.width=4,fig.height=7}
+r_df_melt_mdi <- melt(r_df_mdi %>% rownames_to_column("SeqID"))
+p_df_melt_mdi <- melt(p_df_sig_mdi %>% rownames_to_column("SeqID"),
+                      id.vars = c("SeqID"))
+
+r_df_melt_mdi$SeqID <- factor(r_df_melt_mdi$SeqID,
+                              levels=unique(r_df_melt_mdi$SeqID))
+
+p_df_melt_mdi$SeqID <- factor(p_df_melt_mdi$SeqID,
+                              levels=unique(p_df_melt_mdi$SeqID))
+
+r_df_melt_mdi$variable <- factor(r_df_melt_mdi$variable,
+                              levels=rev(unique(r_df_melt_mdi$variable)))
+
+p_df_melt_mdi$variable <- factor(p_df_melt_mdi$variable,
+                              levels=rev(unique(p_df_melt_mdi$variable)))
+
+p_mdi <- ggplot() + 
+  geom_tile(data=r_df_melt_mdi, aes(SeqID, variable, fill= value))  + 
+  theme_minimal() + 
+  scale_fill_gradient2(name = "Rho", low = "blue", mid = "white", high = "red", midpoint = 0,limits = c(-0.7, 0.7)) + 
+  geom_text(data=p_df_melt_mdi,aes(x=SeqID,y=variable,label=value,vjust=0.6)) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  xlab("") + ylab("")  + 
+  ggtitle("MDI")+ 
+  theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15))
+
+p_mdi
+```
+
+# Bacteria and significant clinical variables
+
+## Terminal ileum
+
+### Genus level
+
+```{r}
+level="genus"
+```
 
 Aggregation, filtering
 
 ```{r}
+# Aggregation
 genus_data <- aggregate_taxa(ileum_asv_tab,
                              ileum_taxa_tab,
-                             taxonomic_level="Genus",
+                             taxonomic_level=level,
                              names=TRUE)
+# Filtration
+filt_data <- filtering_steps(genus_data[[1]],
+                             genus_data[[2]],
+                             ileum_metadata,
+                             seq_depth_threshold=10000)
 
-filt_ileum_genus_tab <- genus_data[[1]]
-filt_ileum_genus_taxa <- genus_data[[2]]
-filt_ileum_metadata <- ileum_metadata
+filt_ileum_genus_tab <- filt_data[[1]]
+filt_ileum_genus_taxa <- filt_data[[2]]
+filt_ileum_metadata_genus <- filt_data[[3]]
 ```
 
 ```{r}
-psc_effect_ileum_genus <- read.xlsx("results/Q1/PSC_effect_terminal_ileum.xlsx",
-                                    sheet = "Ileum Genus")
-psc_taxa <- psc_effect_ileum_genus$ASV
+psc_effect_ileum_genus <- read.xlsx(
+  "../results/Q1/univariate_analysis/supplements_psc_effect_terminal_ileum.xlsx",
+  sheet = "terminal_ileum genus")
+psc_taxa <- psc_effect_ileum_genus$SeqID
 increased <- psc_effect_ileum_genus$ASV[psc_effect_ileum_genus$log2FoldChange >0]
 decreased <- psc_effect_ileum_genus$ASV[psc_effect_ileum_genus$log2FoldChange <0]
 ```
 
-#### Increased + decreased 
+**Increased + decreased **
 
 ```{r}
 my_table <- filt_ileum_genus_tab %>% column_to_rownames("SeqID")
@@ -1243,12 +1460,25 @@ metadata_with_abundances <- data_clr %>% full_join(metadata_ileum,by="SampleID")
 ```
 
 ```{r}
+# significant variables
 variables <- c("ALP",
-               "GGT",
-               "APRI_score", 
-               "FIB4_score",
+               "APRI", 
                "Albumin",
                "Platelets")
+
+```
+
+```{r}
+corrs_ileum <- corrs[grepl("ileum_genus",names(corrs))]
+corrs_colon <- corrs[grepl("colon_genus",names(corrs))]
+```
+
+```{r,fig.width=3,fig.height=7}
+prepared_list <- prepare_for_heatmap(corrs_ileum,corrs_colon)
+p_df_sig_mdi <- prepared_list[[1]]
+
+variables <- colnames(p_df_sig_mdi)[!apply(p_df_sig_mdi,2,function(x) {
+  all(x == "")})]
 ```
 
 
@@ -1266,7 +1496,7 @@ for (clinical_variable in variables){
   # correlation
   corr <- clinical_correlation_abundances(metadata_with_abundances,clinical_variable,taxon,level="genus")
   corrs[[paste0("ileum_genus_",clinical_variable,"_", taxon)]] <- corr
-  if ( (corr$P == "< 0.05") | (corr$P == "< 0.01") | (corr$P == "< 0.01") ){
+  if (corr$P <0.05){
     p <- clinical_scatter_abundances(corr,metadata_with_abundances,clinical_variable,taxon,level="genus",size = 3)
   clinical_plots[[paste0("ileum_genus_",clinical_variable,"_",taxon)]] <- p
   } else print(corr$P)
@@ -1276,13 +1506,37 @@ for (clinical_variable in variables){
 ```
 
 ```{r}
-clinical_plots_ileum <- clinical_plots
-corrs_ileum <- corrs
+prepared_list <- subprepare_for_heatmap(corrs,MDI = FALSE)
+p_df_sig <- prepared_list[[1]]
+r_df <- prepared_list[[2]]
 ```
 
+```{r}
+r_df_melt <- melt(r_df %>% rownames_to_column("SeqID"))
+p_df_melt <- melt(p_df_sig %>% rownames_to_column("SeqID"),id.vars = c("SeqID"))
+
+r_df_melt$variable <- factor(r_df_melt$variable, 
+                             levels=rev(unique(r_df_melt$variable)))
+p_df_melt$variable <- factor(p_df_melt$variable,
+                             levels =rev(unique(p_df_melt$variable)))
+
+r_df_melt$SeqID <- factor(r_df_melt$SeqID, levels = unique(r_df_melt$SeqID))
+p_df_melt$SeqID <- factor(p_df_melt$SeqID, levels = unique(p_df_melt$SeqID))
+
+p_ileum <- ggplot() + 
+  geom_tile(data=r_df_melt, aes(variable, SeqID, fill= value))  + 
+  theme_minimal() + 
+  scale_fill_gradient2(name = "Rho", low = "blue", mid = "white", high = "red", midpoint = 0,limits = c(-0.5, 0.5)) + 
+  geom_text(data=p_df_melt,aes(x=variable,y=SeqID,label=value,vjust=0.6)) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  xlab("") + ylab("")  + 
+  ggtitle("Terminal ileum")+ 
+  theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15))
+
+p_ileum
+```
 
 ## Colon
-
 
 ### Genus level
 
@@ -1294,21 +1548,26 @@ genus_data <- aggregate_taxa(colon_asv_tab,
                              taxonomic_level="Genus",
                              names=TRUE)
 
-filt_colon_genus_tab <- genus_data[[1]]
-filt_colon_genus_taxa <- genus_data[[2]]
-filt_colon_metadata <- colon_metadata
+# Filtration
+filt_data <- filtering_steps(genus_data[[1]],
+                             genus_data[[2]],
+                             colon_metadata,
+                             seq_depth_threshold=10000)
+
+filt_colon_genus_tab <- filt_data[[1]]
+filt_colom_genus_taxa <- filt_data[[2]]
+filt_colon_metadata_genus <- filt_data[[3]]
 ```
 
 ```{r}
-psc_effect_colon_genus <- read.xlsx("results/Q1/PSC_effect_colon.xlsx",
-                                    sheet = "colon Genus")
+psc_effect_colon_genus <- read.xlsx("../results/Q1/univariate_analysis/supplements_psc_effect_colon.xlsx",
+                                    sheet = "colon genus")
 
-psc_taxa <- psc_effect_colon_genus$ASV
-increased <- psc_effect_colon_genus$ASV[psc_effect_colon_genus$log2FoldChange >0]
-decreased <- psc_effect_colon_genus$ASV[psc_effect_colon_genus$log2FoldChange <0]
+psc_taxa <- psc_effect_colon_genus$SeqID
+increased <- psc_effect_colon_genus$SeqID[psc_effect_colon_genus$log2FoldChange >0]
+decreased <- psc_effect_colon_genus$SeqID[psc_effect_colon_genus$log2FoldChange <0]
 ```
 
-#### Increased + decreased 
 
 ```{r}
 my_table <- filt_colon_genus_tab %>% column_to_rownames("SeqID")
@@ -1319,12 +1578,8 @@ metadata_with_abundances <- data_clr %>% full_join(metadata_colon,by="SampleID")
 ```
 
 ```{r}
-variables <- c("ALP",
-               "GGT",
-               "APRI_score", 
-               "FIB4_score",
-               "Albumin",
-               "Platelets")
+variables <- colnames(p_df_sig_mdi)[!apply(p_df_sig_mdi,2,function(x) {
+  all(x == "")})]
 ```
 
 
@@ -1357,384 +1612,356 @@ clinical_plots_colon <- clinical_plots
 corrs_colon <- corrs
 ```
 
-
-# Paper-ready figures
-
-## Clinical variables - MD index
-
 ```{r}
-corrs_ileum <- corrs[grepl("ileum_genus",names(corrs))]
-corrs_colon <- corrs[grepl("colon_genus",names(corrs))]
+prepared_list <- subprepare_for_heatmap(corrs,MDI = FALSE)
+p_df_sig <- prepared_list[[1]]
+r_df <- prepared_list[[2]]
 ```
-
-### Ileum
-
-```{r}
-# Example list structure for demonstration
-# Initialize empty lists for r and P values
-r_values <- list()
-p_values <- list()
-
-names(corrs_ileum) <- gsub("APRI_score","APRI.score",names(corrs_ileum))
-names(corrs_ileum) <- gsub("FIB4_score","FIB4.score",names(corrs_ileum))
-names(corrs_ileum) <- gsub("MAYO_dai","MAYO.dai",names(corrs_ileum))
-names(corrs_ileum) <- gsub("Nancy_max","Nancy.max",names(corrs_ileum))
-names(corrs_ileum) <- gsub("MAYO_PSC","MAYO.PSC",names(corrs_ileum))
-
-# Extract bacteria names and clinical variables
-for (name in names(corrs_ileum)) {
-  clinical_var <- sub("^(.*?_){2}", "",  name)
-  bacterium <- "MDI Terminal ileum"
-  
-  # Fill the r and P lists
-  if (!is.null(corrs_ileum[[name]]$r)) {
-    r_values[[bacterium]][clinical_var] <- corrs_ileum[[name]]$r
-  }
-  if (!is.null(corrs_ileum[[name]]$P)) {
-    p_values[[bacterium]][clinical_var] <- corrs_ileum[[name]]$P
-  }
-}
-
-# Convert the lists to data frames
-r_df <- do.call(rbind, lapply(r_values, function(x) setNames(as.data.frame(t(x)), names(x))))
-p_df <- do.call(rbind, lapply(p_values, function(x) setNames(as.data.frame(t(x)), names(x))))
-
-# Add row names as bacteria names
-rownames(r_df) <- names(r_values)
-rownames(p_df) <- names(p_values)
-
-colnames(r_df) <- gsub("FIB4.score","FIB-4",colnames(r_df))
-colnames(p_df) <- gsub("FIB4.score","FIB-4",colnames(p_df))
-
-colnames(r_df) <- gsub("APRI.score","APRI",colnames(r_df))
-colnames(p_df) <- gsub("APRI.score","APRI",colnames(p_df))
-
-colnames(r_df) <- gsub("MAYO.PSC","MAYO PSC",colnames(r_df))
-colnames(p_df) <- gsub("MAYO.PSC","MAYO PSC",colnames(p_df))
-
-colnames(r_df) <- gsub("AOM_score","AOM",colnames(r_df))
-colnames(p_df) <- gsub("AOM_score","AOM",colnames(p_df))
-
-colnames(r_df) <- gsub("Nancy.max","Nancy max",colnames(r_df))
-colnames(p_df) <- gsub("Nancy.max","Nancy max",colnames(p_df))
-
-colnames(r_df) <- gsub("MAYO.dai","MAYO DAI",colnames(r_df))
-colnames(p_df) <- gsub("MAYO.dai","MAYO DAI",colnames(p_df))
-
-colnames(r_df) <- gsub("Fecal.calprotectin","Fecal calprotectin",colnames(r_df))
-colnames(p_df) <- gsub("Fecal.calprotectin","Fecal calprotectin",colnames(p_df))
-
-pd_df_corrected <- as.data.frame(p.adjust(p_df,method="BH"))
-p_df_sig <- pd_df_corrected
-p_df_sig[,] <- ""
-
-p_df_sig[pd_df_corrected < 0.05] <- "*"
-p_df_sig[pd_df_corrected < 0.01] <- "**"
-p_df_sig[pd_df_corrected < 0.001] <- "***"
-
-p_df_sig_ileum <- t(p_df_sig) %>% as.data.frame() %>% `rownames<-`("MDI Terminal ileum")
-r_df_ileum <- r_df
-```
-
-### Colon
-
-```{r}
-# Example list structure for demonstration
-# Initialize empty lists for r and P values
-r_values <- list()
-p_values <- list()
-
-names(corrs_colon) <- gsub("APRI_score","APRI.score",names(corrs_colon))
-names(corrs_colon) <- gsub("FIB4_score","FIB4.score",names(corrs_colon))
-names(corrs_colon) <- gsub("MAYO_dai","MAYO.dai",names(corrs_colon))
-names(corrs_colon) <- gsub("Nancy_max","Nancy.max",names(corrs_colon))
-names(corrs_colon) <- gsub("MAYO_PSC","MAYO.PSC",names(corrs_colon))
-
-# Extract bacteria names and clinical variables
-for (name in names(corrs_colon)) {
-  clinical_var <- sub("^(.*?_){2}", "",  name)
-  bacterium <- "MDI Colon"
-  
-  # Fill the r and P lists
-  if (!is.null(corrs_colon[[name]]$r)) {
-    r_values[[bacterium]][clinical_var] <- corrs_colon[[name]]$r
-  }
-  if (!is.null(corrs_colon[[name]]$P)) {
-    p_values[[bacterium]][clinical_var] <- corrs_colon[[name]]$P
-  }
-}
-
-# Convert the lists to data frames
-r_df <- do.call(rbind, lapply(r_values, function(x) setNames(as.data.frame(t(x)), names(x))))
-p_df <- do.call(rbind, lapply(p_values, function(x) setNames(as.data.frame(t(x)), names(x))))
-
-# Add row names as bacteria names
-rownames(r_df) <- names(r_values)
-rownames(p_df) <- names(p_values)
-
-colnames(r_df) <- gsub("FIB4.score","FIB-4",colnames(r_df))
-colnames(p_df) <- gsub("FIB4.score","FIB-4",colnames(p_df))
-
-colnames(r_df) <- gsub("APRI.score","APRI",colnames(r_df))
-colnames(p_df) <- gsub("APRI.score","APRI",colnames(p_df))
-
-colnames(r_df) <- gsub("MAYO.PSC","MAYO PSC",colnames(r_df))
-colnames(p_df) <- gsub("MAYO.PSC","MAYO PSC",colnames(p_df))
-
-colnames(r_df) <- gsub("AOM_score","AOM",colnames(r_df))
-colnames(p_df) <- gsub("AOM_score","AOM",colnames(p_df))
-
-colnames(r_df) <- gsub("Nancy.max","Nancy max",colnames(r_df))
-colnames(p_df) <- gsub("Nancy.max","Nancy max",colnames(p_df))
-
-colnames(r_df) <- gsub("MAYO.dai","MAYO DAI",colnames(r_df))
-colnames(p_df) <- gsub("MAYO.dai","MAYO DAI",colnames(p_df))
-
-colnames(r_df) <- gsub("Fecal.calprotectin","Fecal calprotectin",colnames(r_df))
-colnames(p_df) <- gsub("Fecal.calprotectin","Fecal calprotectin",colnames(p_df))
-
-pd_df_corrected <- as.data.frame(p.adjust(p_df,method="BH"))
-p_df_sig <- pd_df_corrected
-p_df_sig[,] <- ""
-  
-p_df_sig[pd_df_corrected < 0.05] <- "*"
-p_df_sig[pd_df_corrected < 0.01] <- "**"
-p_df_sig[pd_df_corrected < 0.001] <- "***"
-
-p_df_sig_colon <- t(p_df_sig) %>% as.data.frame() %>% `rownames<-`("MDI Colon")
-r_df_colon <- r_df
-```
-
-```{r}
-p_df_sig <- rbind(p_df_sig_ileum,p_df_sig_colon)
-r_df <- rbind(r_df_ileum,r_df_colon)
-
-p_df_sig_mdi <- p_df_sig 
-r_df_mdi <- r_df 
-```
-
-```{r}
-r_df_melt_mdi <- melt(r_df_mdi %>% rownames_to_column("SeqID"))
-p_df_melt_mdi <- melt(p_df_sig_mdi %>% rownames_to_column("SeqID"),id.vars = c("SeqID"))
-
-r_df_melt_mdi$SeqID <- factor(r_df_melt_mdi$SeqID,
-                              levels=unique(r_df_melt_mdi$SeqID))
-
-p_df_melt_mdi$SeqID <- factor(p_df_melt_mdi$SeqID,
-                              levels=unique(p_df_melt_mdi$SeqID))
-
-r_df_melt_mdi$variable <- factor(r_df_melt_mdi$variable,
-                                 levels=rev(c("ALP","GGT","ALT","AST","Bilirubin",
-                                          "INR","Albumin","Platelets", "Creatinine",
-                                          "FIB-4",
-                                          "APRI","MAYO PSC","AOM",
-                                          "Fecal calprotectin",
-                                          "Nancy max", "eMAYO","MAYO DAI")))
-
-p_df_melt_mdi$variable <- factor(p_df_melt_mdi$variable,
-                                 levels=rev(c("ALP","GGT","ALT","AST","Bilirubin",
-                                          "INR","Albumin","Platelets", "Creatinine",
-                                          "FIB-4",
-                                          "APRI","MAYO PSC","AOM",
-                                          "Fecal calprotectin",
-                                          "Nancy max", "eMAYO","MAYO DAI")))
-p <- ggplot() + 
-  geom_tile(data=r_df_melt_mdi, aes(SeqID, variable, fill= value))  + 
-  theme_minimal() + 
-  scale_fill_gradient2(name = "Rho", low = "blue", mid = "white", high = "red", midpoint = 0,limits = c(-0.7, 0.7)) + 
-  geom_text(data=p_df_melt_mdi,aes(x=SeqID,y=variable,label=value,vjust=0.6)) + 
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
-  xlab("") + ylab("")  + 
-  ggtitle("MDI")+ 
-  theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15))
-
-p
-```
-
-## HEATMAP
-
-## Ileum
-
-```{r}
-# Example list structure for demonstration
-# Initialize empty lists for r and P values
-r_values <- list()
-p_values <- list()
-
-names(corrs_ileum) <- gsub("APRI_score","APRI.score",names(corrs_ileum))
-names(corrs_ileum) <- gsub("FIB4_score","FIB4.score",names(corrs_ileum))
-names(corrs_ileum) <- gsub("MAYO_dai","MAYO.dai",names(corrs_ileum))
-names(corrs_ileum) <- gsub("Nancy_max","Nancy.max",names(corrs_ileum))
-names(corrs_ileum) <- gsub("MAYO_PSC","MAYO.PSC",names(corrs_ileum))
-
-# Extract bacteria names and clinical variables
-for (name in names(corrs_ileum)) {
-  bacterium <- sub("^(.*?_){3}", "",  name)
-  clinical_var <- sub(bacterium,"", sub("^(.*?_){2}", "",  name))
-  clinical_var <- gsub("_","",clinical_var)
-  
-  # Fill the r and P lists
-  if (!is.null(corrs_ileum[[name]]$r)) {
-    r_values[[bacterium]][clinical_var] <- corrs_ileum[[name]]$r
-  }
-  if (!is.null(corrs_ileum[[name]]$P)) {
-    p_values[[bacterium]][clinical_var] <- corrs_ileum[[name]]$P
-  }
-}
-
-# Convert the lists to data frames
-r_df <- do.call(rbind, lapply(r_values, function(x) setNames(as.data.frame(t(x)), names(x))))
-p_df <- do.call(rbind, lapply(p_values, function(x) setNames(as.data.frame(t(x)), names(x))))
-
-# Add row names as bacteria names
-rownames(r_df) <- names(r_values)
-rownames(p_df) <- names(p_values)
-
-colnames(r_df) <- gsub("APRI.score","APRI",colnames(r_df))
-colnames(p_df) <- gsub("APRI.score","APRI",colnames(p_df))
-
-colnames(r_df) <- gsub("FIB4.score","FIB-4",colnames(r_df))
-colnames(p_df) <- gsub("FIB4.score","FIB-4",colnames(p_df))
-
-
-pd_df_corrected <- as.data.frame(apply(p_df,2,function(x) p.adjust(x, method="BH")))
-p_df_sig <- pd_df_corrected
-p_df_sig[,] <- ""
-
-p_df_sig[pd_df_corrected < 0.05] <- "*"
-p_df_sig[pd_df_corrected < 0.01] <- "**"
-p_df_sig[pd_df_corrected < 0.001] <- "***"
-```
-
 
 ```{r}
 r_df_melt <- melt(r_df %>% rownames_to_column("SeqID"))
 p_df_melt <- melt(p_df_sig %>% rownames_to_column("SeqID"),id.vars = c("SeqID"))
 
-r_df_melt$variable <- factor(r_df_melt$variable, levels = c("ALP","GGT","Albumin",
-                                                            "Platelets","FIB-4",
-                                                            "APRI"))
-p_df_melt$variable <- factor(p_df_melt$variable, levels = c("ALP","GGT","Albumin",
-                                                            "Platelets","FIB-4",
-                                                            "APRI"))
+r_df_melt$variable <- factor(r_df_melt$variable, 
+                             levels=rev(unique(r_df_melt$variable)))
+p_df_melt$variable <- factor(p_df_melt$variable,
+                             levels =rev(unique(p_df_melt$variable)))
+
 r_df_melt$SeqID <- factor(r_df_melt$SeqID, levels = unique(r_df_melt$SeqID))
 p_df_melt$SeqID <- factor(p_df_melt$SeqID, levels = unique(p_df_melt$SeqID))
 
-p_ileum <- ggplot() + 
+p_colon <- ggplot() + 
   geom_tile(data=r_df_melt, aes(variable, SeqID, fill= value))  + 
   theme_minimal() + 
   scale_fill_gradient2(name = "Rho", low = "blue", mid = "white", high = "red", midpoint = 0,limits = c(-0.5, 0.5)) + 
   geom_text(data=p_df_melt,aes(x=variable,y=SeqID,label=value,vjust=0.6)) + 
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   xlab("") + ylab("")  + 
-  ggtitle("Terminal ileum")+ 
-  theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15))
-
-p_ileum
-```
-
-## Colon
-
-```{r}
-# Example list structure for demonstration
-# Initialize empty lists for r and P values
-r_values <- list()
-p_values <- list()
-
-names(corrs_colon) <- gsub("APRI_score","APRI.score",names(corrs_colon))
-names(corrs_colon) <- gsub("FIB4_score","FIB4.score",names(corrs_colon))
-names(corrs_colon) <- gsub("MAYO_dai","MAYO.dai",names(corrs_colon))
-names(corrs_colon) <- gsub("Nancy_max","Nancy.max",names(corrs_colon))
-names(corrs_colon) <- gsub("MAYO_PSC","MAYO.PSC",names(corrs_colon))
-
-
-# Extract bacteria names and clinical variables
-for (name in names(corrs_colon)) {
-  bacterium <- sub("^(.*?_){3}", "",  name)
-  clinical_var <- sub(bacterium,"", sub("^(.*?_){2}", "",  name))
-  clinical_var <- gsub("_","",clinical_var)
-  
-  # Fill the r and P lists
-  if (!is.null(corrs_colon[[name]]$r)) {
-    r_values[[bacterium]][clinical_var] <- corrs_colon[[name]]$r
-  }
-  if (!is.null(corrs_colon[[name]]$P)) {
-    p_values[[bacterium]][clinical_var] <- corrs_colon[[name]]$P
-  }
-}
-
-# Convert the lists to data frames
-r_df <- do.call(rbind, lapply(r_values, function(x) setNames(as.data.frame(t(x)), names(x))))
-p_df <- do.call(rbind, lapply(p_values, function(x) setNames(as.data.frame(t(x)), names(x))))
-
-# Add row names as bacteria names
-rownames(r_df) <- names(r_values)
-rownames(p_df) <- names(p_values)
-
-colnames(r_df) <- gsub("APRI.score","APRI",colnames(r_df))
-colnames(p_df) <- gsub("APRI.score","APRI",colnames(p_df))
-
-colnames(r_df) <- gsub("FIB4.score","FIB-4",colnames(r_df))
-colnames(p_df) <- gsub("FIB4.score","FIB-4",colnames(p_df))
-
-pd_df_corrected <- as.data.frame(apply(p_df,2,function(x) p.adjust(x, method="BH")))
-p_df_sig <- pd_df_corrected
-p_df_sig[,] <- ""
-
-p_df_sig[pd_df_corrected < 0.05] <- "*"
-p_df_sig[pd_df_corrected < 0.01] <- "**"
-p_df_sig[pd_df_corrected < 0.001] <- "***"
-```
-
-
-```{r}
-r_df_melt_colon <- melt(r_df %>% rownames_to_column("SeqID"))
-p_df_melt_colon <- melt(p_df_sig %>% rownames_to_column("SeqID"),id.vars = c("SeqID"))
-
-r_df_melt_colon$variable <- factor(r_df_melt_colon$variable, levels = c("ALP","GGT","Albumin",
-                                                            "Platelets","FIB-4",
-                                                            "APRI"))
-r_df_melt_colon$variable <- factor(r_df_melt_colon$variable, levels = c("ALP","GGT","Albumin",
-                                                            "Platelets","FIB-4",
-                                                            "APRI"))
-
-r_df_melt_colon$SeqID <- factor(r_df_melt_colon$SeqID, levels = rev(c(increased,decreased)))
-p_df_melt_colon$SeqID <- factor(p_df_melt_colon$SeqID, levels = rev(c(increased,decreased)))
-
-p_colon <- ggplot() + 
-  geom_tile(data=r_df_melt_colon, aes(variable, SeqID, fill= value)) + 
-  theme_minimal() + 
-  scale_fill_gradient2(name = "Rho", low = "blue", mid = "white", high = "red", midpoint = 0,limits = c(-0.5, 0.5)) + 
-  geom_text(data=p_df_melt_colon,aes(x=variable,y=SeqID,label=value,vjust=0.6)) + 
-  xlab("") + ylab("")  +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   ggtitle("Colon")+ 
   theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15))
 
 p_colon
 ```
 
-```{r}
-p_heatmap <- ggarrange(p_ileum,p_colon,ncol=2,
-                       common.legend = TRUE,
-                       legend = "right")
-```
+## heatmap plot
 
-```{r, eval=FALSE}
-pdf("clanok/obrazky/q1/correlation_abundances.pdf",height = 5,width = 10)
-p_heatmap
+```{r,fig.width=15,fig.height=5}
+mdi_heatmap <- ggarrange(p_mdi,p_ileum,p_colon,ncol = 3,widths = c(0.7,1,1))
+mdi_heatmap
+```
+```{r,results='hide'}
+pdf("../figures/clinical/heatmap.pdf",
+    height =5,width = 15)
+mdi_heatmap
 dev.off()
 ```
 
+# PCA and clinical variables fit
+
+## Terminal ileum
+
+**Analysis**
+
 ```{r}
-p_heatmap <- ggarrange(p,p_ileum,p_colon,ncol=3,
-                       common.legend = TRUE,
-                       widths = c(0.5,1,1),
-                       legend = "right")
+segment="terminal_ileum"
 ```
 
-```{r, eval=FALSE}
-pdf("clanok/obrazky/q1/correlation_abundances_2.pdf",height = 5,width = 12)
-p_heatmap
-dev.off()
+### Main analysis - Genus, Aitchison
+
+**Genus level, Aitchison distance**
+
+```{r}
+level="genus"
 ```
+
+Aggregation, filtering
+
+```{r,warning=FALSE}
+# Aggregation
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level=level,
+                             names=TRUE)
+# Filtration
+filt_data <- filtering_steps(genus_data[[1]],
+                             genus_data[[2]],
+                             ileum_metadata,
+                             seq_depth_threshold=10000)
+
+filt_ileum_genus_tab <- filt_data[[1]]
+filt_ileum_genus_taxa <- filt_data[[2]]
+filt_ileum_metadata_genus <- filt_data[[3]]
+```
+
+**Plots**
+
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_ileum_genus_tab,
+                                 filt_ileum_genus_taxa,
+                                 filt_ileum_metadata_genus,
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=3, 
+                     show_legend=TRUE,
+                     clinical = TRUE,
+                     clinical_metadata = metadata_final)
+
+
+# see the results
+p
+```
+
+
+### Supplementary analysis
+
+#### Genus level
+
+```{r}
+level="genus"
+```
+
+##### Bray-Curtis
+
+**Plots**
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_ileum_genus_tab,
+                                 filt_ileum_genus_taxa,
+                                 filt_ileum_metadata_genus,
+                                 measure = "bray",
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=3, show_legend=TRUE,
+                     clinical=TRUE,
+                     clinical_metadata = metadata_final)
+
+# see the results
+p
+```
+
+##### Jaccard
+
+**Plots**
+
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_ileum_genus_tab,
+                                 filt_ileum_genus_taxa,
+                                 filt_ileum_metadata_genus,
+                                 measure = "jaccard",
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=3, show_legend=TRUE,
+                     clinical=TRUE,
+                     clinical_metadata = metadata_final)
+
+# see the results
+p
+```
+
+#### ASV level
+
+```{r}
+level="ASV"
+```
+
+##### Aitchison 
+
+**PCoA**
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_ileum_asv_tab,
+                           filt_ileum_taxa_tab,
+                           filt_ileum_metadata,
+                           show_boxplots = TRUE,
+                           variable = "Group", size=3, show_legend=TRUE,
+                     clinical=TRUE,
+                     clinical_metadata = metadata_final)
+
+
+# see the results
+p
+```
+
+##### Bray-Curtis 
+
+**PCoA**
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_ileum_asv_tab,
+                     filt_ileum_taxa_tab,
+                     filt_ileum_metadata,
+                     measure = "bray",
+                     show_boxplots = TRUE,
+                     variable = "Group", size=3, show_legend=TRUE,
+                     clinical=TRUE,
+                     clinical_metadata=metadata_final)
+
+# see the results
+p
+```
+
+##### Jaccard
+
+**PCoA**
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_ileum_asv_tab,
+                     filt_ileum_taxa_tab,
+                     filt_ileum_metadata,
+                     measure = "jaccard",
+                     show_boxplots = TRUE,
+                     variable = "Group", size=3, show_legend=TRUE,
+                     clinical=TRUE,
+                     clinical_metadata=metadata_final)
+
+# see the results
+p
+```
+
+## Colon
+
+```{r}
+segment="colon"
+```
+
+### Main analysis - Genus, Aitchison
+
+**Genus level, Aitchison distance**
+
+```{r}
+level="genus"
+```
+
+Aggregation, filtering
+
+```{r}
+# Aggregation
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level=level,
+                             names=TRUE)
+# Filtration
+filt_data <- filtering_steps(genus_data[[1]],
+                             genus_data[[2]],
+                             colon_metadata,
+                             seq_depth_threshold=10000)
+
+filt_colon_genus_tab <- filt_data[[1]]
+filt_colon_genus_taxa <- filt_data[[2]]
+filt_colon_genus_metadata <- filt_data[[3]]
+```
+
+**PCoA**
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_colon_genus_tab,
+                                 filt_colon_genus_taxa,
+                                 filt_colon_genus_metadata,
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=3, show_legend=TRUE,
+                     clinical=TRUE, clinical_metadata = metadata_final)
+
+# see the results
+p
+```
+
+### Supplementary analysis
+
+#### Genus level
+
+```{r}
+level="genus"
+```
+
+##### Bray-Curtis
+
+**Plots**
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_colon_genus_tab,
+                                 filt_colon_genus_taxa,
+                                 filt_colon_genus_metadata,
+                                 measure = "bray",
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=3, show_legend=TRUE,
+                     clinical=TRUE, clinical_metadata = metadata_final)
+
+
+# see the results
+p
+```
+
+##### Jaccard
+
+**Plots**
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_colon_genus_tab,
+                                 filt_colon_genus_taxa,
+                                 filt_colon_genus_metadata,
+                                 measure = "jaccard",
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=3, show_legend=TRUE,
+                     clinical=TRUE, clinical_metadata = metadata_final)
+
+
+# see the results
+p
+```
+
+#### ASV level
+
+```{r}
+level="ASV"
+```
+
+##### Aitchison 
+
+**PCoA**
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_colon_asv_tab,
+                           filt_colon_taxa_tab,
+                           filt_colon_metadata,
+                           show_boxplots = TRUE,
+                           variable = "Group", size=3, show_legend=TRUE,
+                     clinical=TRUE, clinical_metadata = metadata_final)
+
+
+# see the results
+p
+```
+
+##### Bray-Curtis 
+
+**PCoA**
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_colon_asv_tab,
+                     filt_colon_taxa_tab,
+                     filt_colon_metadata,
+                     measure = "bray",
+                     show_boxplots = TRUE,
+                     variable = "Group", size=3, show_legend=TRUE,
+                     clinical=TRUE, clinical_metadata = metadata_final)
+
+# see the results
+p
+```
+
+##### Jaccard
+
+**PCoA**
+
+```{r,warning=FALSE}
+p <- pca_plot_custom(filt_colon_asv_tab,
+                     filt_colon_taxa_tab,
+                     filt_colon_metadata,
+                     measure = "jaccard",
+                     show_boxplots = TRUE,
+                     variable = "Group", size=3, show_legend=TRUE,
+                     clinical=TRUE, clinical_metadata = metadata_final)
+
+# see the results
+p
+```
+

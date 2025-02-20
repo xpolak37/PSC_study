@@ -1,0 +1,5716 @@
+---
+title: "PSC article analysis Q3"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    toc_depth: 6
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+# 3. Hypothesis: PSC disease is associated with IBD??
+
+**Pre_LTx vs Post_LTx vs Healthy analysis on merged data**
+
+-   Alpha diversity –\> group effect, country effect, interaction effect
+
+-   Beta diversity – PERMANOVA, PCA -\> group effect, country effect,
+    interaction effect
+
+-   DAA -\>
+
+    -   o Group effect – linDA + MaAsLin2 intersection
+
+    -   o Country effect – linDA + MaAsLin2 union
+
+**Pre_ltx vs Healthy** – by this comparison, we will find the effect of
+disease, liver cirrhosis and overall bad clinical condition
+
+**Pre_ltx vs post_ltx** – by this comparison, we will find the effect of
+transplantation + general improvement of the clinical state
+
+**Post_ltx vs Healthy** – by this comparison, we will find if the
+transplantation leads to „healthy microbiome”
+
+TO DO ---- Hopefully, we will find that all of these groups are somehow
+significantly different.
+
+Regarding **Post_LTx vs Healthy analysis**, we can assume, that the
+differentially abundant taxa between these two groups remain because of
+the persistent gut MB alteration due to the PSC disease. Also,
+transplantation itself could add to this difference, as it has
+definitely strong impact on microbial composition.
+
+Regarding **Pre_LTx vs Healthy analysis**, we can assume, that the
+differentially abundant taxa between these two groups are caused by PSC
+disease and other factors, like liver cirrhosis and overall bad clinical
+condition. To get only PSC associated taxa, we can intersect
+differentially abundant taxa from these aforementioned analyses (see
+diagram below).
+
+TO DO: IMPORTOVAT TABULKU 1
+
+```{r}
+source("custom_functions.R")
+```
+
+# Data Import
+
+Importing ASV, taxa and metadata tables for both Czech and Norway
+samples.
+
+**Czech**
+
+*MICROBIOME*
+
+```{r}
+path = "../../data/analysis_ready_data/ikem/"
+asv_tab_ikem <- as.data.frame(fread(file.path(path,"asv_table_ikem.csv"),
+                                    check.names = FALSE))
+taxa_tab_ikem <- as.data.frame(fread(file.path(path,"taxa_table_ikem.csv"),
+                                     check.names = FALSE))
+metadata_ikem <- as.data.frame(fread(file.path(path,"metadata_ikem.csv"),
+                                     check.names = FALSE))
+```
+
+*IBD info*
+
+```{r}
+path = "../../data/clinical_data/"
+cz <- read.csv(file.path(path,"clinical_metadata_cz.csv")) %>% dplyr::select(SampleID,PatientID,PSC_IBD,Group)
+
+cz$PatientID <- as.character(cz$PatientID)
+metadata_ikem <- merge(metadata_ikem,cz,by=c("SampleID", "Group"),all=TRUE)
+```
+
+**Norway**
+
+*MICROBIOME*
+
+```{r}
+path = "../../data/analysis_ready_data/norway/"
+asv_tab_norway <- as.data.frame(fread(file.path(path,"asv_table_norway.csv"),
+                                    check.names = FALSE))
+taxa_tab_norway <- as.data.frame(fread(file.path(path,"taxa_table_norway.csv"),
+                                    check.names = FALSE))
+metadata_norway <- as.data.frame(fread(file.path(path,"metadata_norway.csv"),
+                                    check.names = FALSE))
+```
+
+*IBD info*
+
+```{r}
+path = "../../data/clinical_data/"
+no <- read.csv(file.path(path,"clinical_metadata_no.csv")) %>% dplyr::select(SampleID,subjectid,IBD, Group)
+
+```
+
+
+# Merging
+
+**TO DO: STATISTICS OF READS**
+
+Merging two countries based on the different matrices - Ileum, Colon.
+
+**Merging clinical metadata**
+
+```{r}
+clinical_metadata <- bind_rows(
+  cz %>% dplyr::mutate(PSC_IBD = case_when(
+    PSC_IBD == "0" ~ "no_ibd",
+    PSC_IBD == "1" ~ "ibd",
+  )) %>% `colnames<-`(c("SampleID","PatientID","IBD","Group")),
+  no %>% `colnames<-`(c("SampleID","PatientID","IBD","Group")) %>%
+    mutate(PatientID=paste0("NO_",PatientID)))
+```
+
+**Terminal ileum**
+
+```{r}
+ileum_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=asv_tab_norway,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=taxa_tab_norway,
+                           metadata_1=metadata_ikem,
+                           metadata_2=metadata_norway,
+                           segment="TI",Q="Q3")
+
+ileum_asv_tab <- ileum_data[[1]]
+ileum_taxa_tab <- ileum_data[[2]]
+ileum_metadata <- ileum_data[[3]]
+
+ileum_metadata <- merge(ileum_metadata,
+                        clinical_metadata %>%
+                          dplyr::select(-Group),
+                        by=c("SampleID"), all.x = TRUE) %>%
+  dplyr::select(-PatientID,Group) %>% 
+  dplyr::mutate(Group=IBD) %>% dplyr::select(-IBD)
+```
+
+**Colon**
+
+```{r}
+colon_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=asv_tab_norway,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=taxa_tab_norway,
+                           metadata_1=metadata_ikem,
+                           metadata_2=metadata_norway,
+                           segment="colon",Q="Q3")
+
+colon_asv_tab <- colon_data[[1]]
+colon_taxa_tab <- colon_data[[2]]
+colon_metadata <- colon_data[[3]]
+
+colon_metadata <- merge(colon_metadata,
+                        clinical_metadata %>%
+                          dplyr::select(-Group),
+                        by=c("SampleID"), all.x = TRUE) %>%
+  dplyr::select(-PatientID,Group) %>% 
+  dplyr::mutate(Group=IBD) %>% dplyr::select(-IBD)
+```
+
+# CHI SQUARE TEST
+
+## Pre_LTx, rPSC, non-rPSC
+
+```{r}
+cz <- cz %>% dplyr::group_by(PSC_IBD,Group) %>%
+  distinct(PatientID, .keep_all = TRUE) %>%
+  count() %>% drop_na() %>% 
+  dplyr::mutate(PSC_IBD = case_when(
+    PSC_IBD == "0" ~ "no_ibd",
+    PSC_IBD == "1" ~ "ibd",
+  )) %>% `colnames<-`(c("IBD","Group","n")) 
+
+no <- no %>% dplyr::group_by(IBD,Group) %>%
+  distinct(subjectid, .keep_all = TRUE) %>%
+  count() %>% drop_na()
+
+# Summarize by IBD and Group
+data <- bind_rows(cz, no) %>%
+  group_by(IBD, Group) %>%
+  summarise(n = sum(n), .groups = "drop") %>%
+  pivot_wider(names_from = Group, values_from = n) %>%
+  column_to_rownames("IBD") %>%
+  as.matrix()
+    
+chi_res <- chisq.test(data)
+chi_res$expected
+chi_res
+```
+
+## Pre_LTx + rPSC (PSC patients), non-rPSC
+
+```{r}
+data2 <- data %>% as.data.frame() %>%
+  dplyr::mutate(PSC=pre_ltx+rPSC) %>% 
+  dplyr::select(PSC,`non-rPSC`) %>% as.matrix()
+
+chi_res <- chisq.test(data2)
+chi_res$expected
+chi_res
+```
+
+## rPSC, non-rPSC
+
+```{r}
+data3 <- data %>% as.data.frame() %>%
+  dplyr::select(rPSC,`non-rPSC`) %>% as.matrix()
+
+chi_res <- chisq.test(data3)
+chi_res$expected
+chi_res
+```
+
+
+# Data Analysis - Terminal ileum
+
+```{r}
+segment="terminal_ileum"
+```
+
+## Filtering
+
+Rules: - prevalence \> 5% (per group) - nearZeroVar with default
+settings - sequencing depth \> 5000 - taxonomic assignment at least
+order
+
+**Rarefaction Curve**
+
+```{r}
+path="../intermediate_files/rarecurves"
+seq_depth_threshold <- 10000
+```
+
+```{r, eval = FALSE}
+ps <- construct_phyloseq(ileum_asv_tab,ileum_taxa_tab,ileum_metadata)
+rareres <- get_rarecurve(obj=ps, chunks=500)
+save(rareres,file = file.path(path,"rarefaction_ileum.Rdata"))
+```
+
+```{r}
+load(file.path(path,"rarefaction_ileum.Rdata"))
+
+prare <- ggrarecurve(obj=rareres,
+                      factorNames="Country",
+                      indexNames=c("Observe")) + 
+  theme_bw() +
+  theme(axis.text=element_text(size=8), panel.grid=element_blank(),
+        strip.background = element_rect(colour=NA,fill="grey"),
+        strip.text.x = element_text(face="bold")) + 
+  geom_vline(xintercept = seq_depth_threshold, 
+             linetype="dashed", 
+             color = "red") + 
+  xlim(0, 20000)
+
+prare
+```
+
+**Library size**
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(ileum_asv_tab, line = c(5000,10000))
+```
+
+### Sequencing depth
+
+```{r}
+data_filt <- seq_depth_filtering(ileum_asv_tab,
+                                 ileum_taxa_tab,
+                                 ileum_metadata,
+                                 seq_depth_threshold = 10000)
+
+filt_ileum_asv_tab <- data_filt[[1]]; alpha_ileum_asv_tab <- filt_ileum_asv_tab
+filt_ileum_taxa_tab <- data_filt[[2]]; alpha_ileum_taxa_tab <- filt_ileum_taxa_tab
+filt_ileum_metadata <- data_filt[[3]]; alpha_ileum_metadata <- filt_ileum_metadata
+
+seq_step <- dim(filt_ileum_asv_tab)[1]
+```
+
+**Library size**
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_ileum_asv_tab,line = c(5000,10000))
+```
+
+### NearZeroVar
+
+```{r}
+data_filt <- nearzerovar_filtering(filt_ileum_asv_tab, 
+                                   filt_ileum_taxa_tab,
+                                   filt_ileum_metadata)
+
+filt_ileum_asv_tab <- data_filt[[1]]
+filt_ileum_taxa_tab <- data_filt[[2]]
+nearzero_step <- dim(filt_ileum_asv_tab)[1]
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_ileum_asv_tab,line = c(5000,10000))
+```
+
+### Final Counts
+
+```{r}
+final_counts_filtering(ileum_asv_tab,
+                       filt_ileum_asv_tab,
+                       filt_ileum_metadata,
+                       seq_step, 0, nearzero_step) %>% `colnames<-`("Count")
+```
+
+## Alpha diversity
+
+```{r}
+path = "../results/Q3/alpha_diversity"
+```
+
+**Calculation**
+
+```{r}
+# Construct MPSE object
+alpha_ileum_metadata$Sample <- alpha_ileum_metadata$SampleID
+ileum_mpse <- as.MPSE(construct_phyloseq(alpha_ileum_asv_tab,
+                                         alpha_ileum_taxa_tab,
+                                         alpha_ileum_metadata))
+
+ileum_mpse %<>% mp_rrarefy(raresize = 10000,seed = 123)
+
+# Calculate alpha diversity - rarefied counts
+ileum_mpse %<>% mp_cal_alpha(.abundance=RareAbundance, force=TRUE)
+```
+
+```{r}
+
+alpha_div_plots <- list()
+
+# preparing data frame
+alpha_data <- data.frame(SampleID=ileum_mpse$Sample.x,
+                         Observe=ileum_mpse$Observe,
+                         Shannon=ileum_mpse$Shannon,
+                         Simpson=ileum_mpse$Simpson,
+                         Pielou=ileum_mpse$Pielou,
+                         Group=ileum_mpse$Group,
+                         Country=ileum_mpse$Country,
+                         Patient=ileum_mpse$Patient)
+
+write.csv(alpha_data,file.path(path,paste0("alpha_indices_",segment,".csv")),
+          row.names = FALSE)
+```
+
+**Plots**
+
+### Country plot
+
+```{r, fig.width=6, fig.height=3, fig.fullwidth=TRUE}
+p_boxplot_alpha <- alpha_diversity_countries(alpha_data)
+
+# save the results
+alpha_div_plots[[paste(segment,"Country")]] <- p_boxplot_alpha
+
+# see the results
+p_boxplot_alpha
+```
+
+```{r,results='hide'}
+pdf("../figures/Q3/alpha_diversity_terminal_ileum.pdf",
+    height =4,width = 6)
+p_boxplot_alpha
+dev.off()
+```
+
+### Custom plot
+
+```{r, fig.width=5, fig.height=3, fig.fullwidth=TRUE}
+alpha_data <- alpha_data %>% 
+  dplyr::select(-c("Simpson","Pielou")) %>%
+  mutate(Richness=Observe)
+
+p_A <- alpha_diversity_custom_2(alpha_data,
+                                size = 1.5,
+                                width = 0.3)
+
+# save the results
+alpha_div_plots[[paste(segment,"Custom")]] <- p_A
+
+p_A
+```
+
+### Linear Model
+
+```{r}
+path = "../results/Q3/alpha_diversity"
+alpha_data <- read.csv(file.path(path,paste0("alpha_indices_",segment,".csv")))
+```
+
+**Richness**
+
+```{r}
+results_model <- pairwise.lm(formula = "Observe ~ Group * Country",
+                             factors=alpha_data$Group,
+                             data=alpha_data)
+
+# check interaction
+if (!is.data.frame(results_model)){
+  results_model_observe <- results_model[[1]]
+  results_model_observe_emeans <- results_model[[2]]
+} else {
+  results_model_observe <- results_model
+  results_model_observe_emeans <- NA
+}
+
+# save the results
+pc_observed <- list(); 
+pc_observed[[segment]] <- results_model_observe
+```
+
+```{r}
+# see the results
+knitr::kable(results_model_observe,digits = 3,
+caption = "Raw results of linear model of richness estimation.")
+
+knitr::kable(results_model_observe_emeans,digits = 3,
+caption = "Raw results of independent country analysis")
+```
+
+**Shannon**
+
+```{r}
+results_model <- pairwise.lm(formula = "Shannon ~ Group * Country",
+                             factors=alpha_data$Group,
+                             data=alpha_data)
+
+# check interaction
+if (!is.data.frame(results_model)){
+  results_model_shannon <- results_model[[1]]
+  results_model_shannon_emeans <- results_model[[2]]
+} else {
+  results_model_shannon <- results_model
+  results_model_shannon_emeans <- NA
+}
+
+# save the results
+pc_shannon <- list(); 
+pc_shannon[[segment]] <- as.data.frame(results_model_shannon)
+
+```
+
+```{r}
+# see the results
+knitr::kable(results_model_shannon,digits = 3,
+caption = "Raw results of linear model of Shannon estimation.")
+
+knitr::kable(results_model_shannon_emeans,digits = 3,
+caption = "Raw results of independent country analysis")
+```
+
+**Simpson**
+
+```{r}
+results_model <- pairwise.lm(formula = "Simpson ~ Group * Country",
+                                     factors=alpha_data$Group,
+                                     data=alpha_data)
+
+# check interaction
+if (!is.data.frame(results_model)){
+  results_model_simpson <- results_model[[1]]
+  results_model_simpson_emeans <- results_model[[2]]
+} else {
+  results_model_simpson <- results_model
+  results_model_simpson_emeans <- NA
+}
+
+
+# save the results
+pc_simpson <- list(); 
+pc_simpson[[segment]] <- as.data.frame(results_model_simpson)
+```
+
+```{r}
+# see the results
+knitr::kable(results_model_simpson,digits = 3,
+caption = "Raw results of linear model of Simpson estimation.")
+
+knitr::kable(results_model_simpson_emeans,digits = 3,
+caption = "Raw results of independent country analysis")
+```
+
+**Pielou**
+
+```{r}
+results_model <- pairwise.lm(formula = "Pielou ~ Group * Country",
+                                     factors=alpha_data$Group,
+                                     data=alpha_data)
+
+# check interaction
+
+if (!is.data.frame(results_model)){
+  results_model_pielou <- results_model[[1]]
+  results_model_pielou_emeans <- results_model[[2]]
+} else {
+  results_model_pielou <- results_model
+  results_model_pielou_emeans <- NA
+}
+
+# save the results
+pc_pielou <- list(); 
+pc_pielou[[segment]] <- as.data.frame(results_model_pielou)
+```
+
+```{r}
+# see the results
+knitr::kable(results_model_pielou,digits = 3,
+caption = "Raw results of linear model of Pielou estimation.")
+
+knitr::kable(results_model_pielou_emeans,digits = 3,
+caption = "Raw results of independent country analysis")
+```
+
+### Saving results
+
+```{r}
+alpha_list <- list(
+  Richness=pc_observed[[segment]] %>% rownames_to_column("Comparison"),
+  Shannon=pc_shannon[[segment]] %>% rownames_to_column("Comparison"),
+  Simpson=pc_simpson[[segment]] %>% rownames_to_column("Comparison"),
+  Pielou=pc_pielou[[segment]] %>% rownames_to_column("Comparison"))
+                   
+write.xlsx(alpha_list, 
+           file = file.path(path,paste0("alpha_diversity_results_",segment,".xlsx")))
+```
+
+
+## Beta diversity
+
+Calculating Aitchison distance (euclidean distance on clr-transformed
+data), both at ASV and genus level.
+
+### Main analysis - Genus, Aitchison
+
+**Genus level, Aitchison distance**
+
+```{r}
+level="genus"
+```
+
+```{r}
+path = "../results/Q3/beta_diversity"
+```
+
+```{r}
+pairwise_aitchison_raw <- list()
+pca_plots_list <- list()
+```
+
+Aggregation, filtering
+
+```{r}
+# Aggregation
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level=level,
+                             names=TRUE)
+# Filtration
+filt_data <- filtering_steps(genus_data[[1]],
+                             genus_data[[2]],
+                             ileum_metadata,
+                             seq_depth_threshold=10000)
+
+filt_ileum_genus_tab <- filt_data[[1]]
+filt_ileum_genus_taxa <- filt_data[[2]]
+filt_ileum_metadata <- filt_data[[3]]
+```
+
+##### PERMANOVA
+
+```{r}
+pairwise_df <- filt_ileum_genus_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(pairwise_df,
+                           filt_ileum_metadata$Group,
+                           covariate = filt_ileum_metadata$Country, sim.method = "robust.aitchison", p.adjust.m="BH")
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "robust.aitchison", p.adjust.m="BH")
+
+# tidy the results
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+pairwise_aitchison_raw[[paste(level, segment)]] <- rbind(pp_factor,pp_cov,pp_fac.cov)
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.1]
+
+if (length(interaction_sig)>0){
+  for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_ileum_metadata$Group,
+                      covariate = filt_ileum_metadata$Country, 
+                      group1 = group1,
+                      group2 = group2)
+  print(result_list)
+}
+}
+
+
+```
+
+##### Plots
+
+**Custom**
+
+```{r}
+p <- pca_plot_custom(filt_ileum_genus_tab,
+                                 filt_ileum_genus_taxa,
+                                 filt_ileum_metadata,
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=3, show_legend=TRUE)
+
+# save the results
+pca_plots_list[[paste(segment,level,"custom")]] <- p
+
+# see the results
+p
+```
+
+```{r,results='hide'}
+pdf("../figures/Q3/beta_diversity_terminal_ileum.pdf",
+    height =5,width = 5)
+p
+dev.off()
+```
+
+#### Saving results
+
+```{r}
+write.xlsx(pairwise_aitchison_raw[[paste(level, segment)]], 
+           file = file.path(path,
+           paste0("beta_diversity_results_", segment,".xlsx")))
+```
+
+### Supplementary analysis
+
+```{r}
+supplements_beta <- list()
+```
+
+#### Genus level
+
+```{r}
+level="genus"
+```
+
+##### Bray-Curtis
+
+**PERMANOVA**
+
+```{r}
+pairwise_df <- filt_ileum_genus_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "bray", p.adjust.m="BH")
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "bray", p.adjust.m="BH")
+
+# tidy the results
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+supplements_beta[[paste("bray",level,segment)]] <- rbind(pp_factor,pp_cov,pp_fac.cov)
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+
+if (length(interaction_sig)>0){
+  for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_ileum_metadata$Group,
+                      covariate = filt_ileum_metadata$Country, 
+                      group1 = group1,
+                      group2 = group2,
+                      sim.method = 'bray')
+  print(result_list)
+}
+}
+
+
+```
+
+**Plots**
+
+```{r}
+p <- pca_plot_custom(filt_ileum_genus_tab,
+                                 filt_ileum_genus_taxa,
+                                 filt_ileum_metadata,
+                                 measure = "bray",
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=3, show_legend=TRUE)
+
+# save the results
+supplements_beta[[paste("PCoA bray",level,segment)]] <- p
+
+# see the results
+p
+```
+
+##### Jaccard
+
+**PERMANOVA**
+
+```{r}
+pairwise_df <- filt_ileum_genus_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "jaccard", p.adjust.m="BH")
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "jaccard", p.adjust.m="BH")
+
+# tidy the results
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+supplements_beta[[paste("jaccard",level,segment)]] <- rbind(pp_factor, 
+                                                            pp_cov, 
+                                                            pp_fac.cov)
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+
+if (length(interaction_sig)>0){
+for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_ileum_metadata$Group,
+                      covariate = filt_ileum_metadata$Country, 
+                      group1 = group1,
+                      group2 = group2,
+                      sim.method = 'jaccard')
+  print(result_list)
+}
+}
+```
+
+**Plots**
+
+*Custom*
+
+```{r}
+p <- pca_plot_custom(filt_ileum_genus_tab,
+                                 filt_ileum_genus_taxa,
+                                 filt_ileum_metadata,
+                                 measure = "jaccard",
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=3, show_legend=TRUE)
+
+# save the results
+supplements_beta[[paste("PCoA jaccard",level,segment)]] <- p
+
+# see the results
+p
+```
+
+#### ASV level
+
+```{r}
+level="ASV"
+```
+
+##### Aitchison 
+
+*PERMANOVA*
+
+```{r}
+# preparing data frame
+pairwise_df <- filt_ileum_asv_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "robust.aitchison", p.adjust.m="BH")
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "robust.aitchison", p.adjust.m="BH")
+
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+supplements_beta[[paste("aitchison",level,segment)]] <- rbind(pp_factor, 
+                                                            pp_cov, 
+                                                            pp_fac.cov)
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+
+if (length(interaction_sig)>0){
+for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_ileum_metadata$Group,
+                      covariate = filt_ileum_metadata$Country, 
+                      group1 = group1,
+                      group2 = group2)
+  print(result_list)
+}
+}
+```
+
+**PCoA**
+
+```{r}
+p <- pca_plot_custom(filt_ileum_asv_tab,
+                           filt_ileum_taxa_tab,
+                           filt_ileum_metadata,
+                           show_boxplots = TRUE,
+                           variable = "Group", size=3, show_legend=TRUE)
+
+# save the results
+supplements_beta[[paste("PCoA aitchison",level,segment)]] <- p
+
+# see the results
+p
+```
+
+##### Bray-Curtis 
+
+*PERMANOVA*
+
+```{r}
+# preparing data frame
+pairwise_df <- filt_ileum_asv_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "bray", p.adjust.m="BH")
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "bray", p.adjust.m="BH")
+
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+supplements_beta[[paste("bray",level,segment)]] <- rbind(pp_factor, 
+                                                            pp_cov, 
+                                                            pp_fac.cov)
+
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+
+if (length(interaction_sig)>0){
+for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_ileum_metadata$Group,
+                      covariate = filt_ileum_metadata$Country, 
+                      group1 = group1,
+                      group2 = group2,
+                      sim.method = 'bray')
+  print(result_list)
+}
+}
+```
+
+**PCoA**
+
+```{r}
+p <- pca_plot_custom(filt_ileum_asv_tab,
+                     filt_ileum_taxa_tab,
+                     filt_ileum_metadata,
+                     measure = "bray",
+                     show_boxplots = TRUE,
+                     variable = "Group", size=3, show_legend=TRUE)
+
+# save the results
+supplements_beta[[paste("PCoA bray",level,segment)]] <- p
+
+# see the results
+p
+```
+
+##### Jaccard
+
+*PERMANOVA*
+
+```{r}
+# preparing data frame
+pairwise_df <- filt_ileum_asv_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, sim.method = "jaccard", p.adjust.m="BH")
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,filt_ileum_metadata$Group,covariate = filt_ileum_metadata$Country, interaction = TRUE, sim.method = "jaccard", p.adjust.m="BH")
+
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+supplements_beta[[paste("jaccard",level,segment)]] <- rbind(pp_factor, 
+                                                            pp_cov, 
+                                                            pp_fac.cov)
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+
+if (length(interaction_sig)>0){
+for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_ileum_metadata$Group,
+                      covariate = filt_ileum_metadata$Country, 
+                      group1 = group1,
+                      group2 = group2,
+                      sim.method = 'jaccard')
+  print(result_list)
+}
+}
+```
+
+**PCoA**
+
+```{r}
+p <- pca_plot_custom(filt_ileum_asv_tab,
+                     filt_ileum_taxa_tab,
+                     filt_ileum_metadata,
+                     measure = "jaccard",
+                     show_boxplots = TRUE,
+                     variable = "Group", size=3, show_legend=TRUE)
+
+# save the results
+supplements_beta[[paste("PCoA jaccard",level,segment)]] <- p
+
+# see the results
+p
+```
+
+#### Saving results
+
+```{r}
+write.xlsx(supplements_beta[!grepl("PCoA",names(supplements_beta))],
+           file = file.path(path,
+           paste0("supplements_beta_diversity_", segment,".xlsx")))
+```
+
+## Univariate Analysis
+
+### Main - Genus level
+
+```{r}
+level="genus"
+```
+
+```{r}
+# needed paths
+path = "../results/Q3/univariate_analysis"
+path_maaslin=file.path("../intermediate_files/maaslin/Q3",level)
+```
+
+```{r}
+# variables
+raw_linda_results_genus <- list();
+raw_linda_results_genus[[segment]] <- list()
+linda_results_genus <- list(); 
+linda_results_genus[[segment]] <- list()
+
+# country and interaction problems
+list_country_union <- list()
+list_intersections <- list()
+list_venns <- list()
+uni_statistics <- list()
+
+# workbook for final df
+wb <- createWorkbook()
+
+# PSC effect
+psc_effect <- list()
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+
+ileum_genus_asv_taxa_tab <- create_asv_taxa_table(ileum_genus_tab,
+                                                  ileum_genus_taxa_tab)
+```
+
+#### ibd vs no_ibd
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+##### linDA
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+
+# prepare the data
+linda_data <- binomial_prep(ileum_genus_tab,
+                            ileum_genus_taxa_tab,
+                            ileum_metadata,
+                            group, usage="linDA")
+
+filt_ileum_uni_data <- linda_data[[1]]
+filt_ileum_uni_taxa <- linda_data[[2]]
+filt_ileum_uni_metadata <- linda_data[[3]]
+
+# fit the model
+linda.obj <- linda(filt_ileum_uni_data, 
+                   filt_ileum_uni_metadata, 
+                   formula = '~ Group * Country')
+
+linda.output <- linda.obj$output
+linda.output <- linda_renaming(linda.output, group)
+
+# save the results
+group1 <- paste0(group[1], " vs ","Group",group[2])
+group2 <- paste0(group[1], " , ",group[2], " - CZ vs NO") 
+group3 <- paste0(group[1], " vs ","Group",group[2], ":CountryNO")
+
+for (grp in c(group1,group2,group3)){
+  raw_linda_results_genus[[segment]][[grp]] <- 
+    rawlinda.df(linda.output,
+                grp,
+                filt_ileum_uni_data,
+                filt_ileum_uni_taxa)
+  
+  linda_results_genus[[segment]][[grp]] <- 
+    linda.df(linda.output,
+             grp,
+             filt_ileum_uni_data,
+             filt_ileum_uni_taxa)
+}
+
+```
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+# volcano plot
+volcano_1 <- volcano_plot_linda(linda.output, 
+                                group1, 
+                                taxa_table = filt_ileum_uni_taxa) + 
+            ggtitle(comparison_name)
+
+volcano_2  <- volcano_plot_linda(linda.output, group2, 
+                                taxa_table = filt_ileum_uni_taxa) + 
+            ggtitle("Country effect") 
+
+volcano_3 <- volcano_plot_linda(linda.output, group3, 
+                                taxa_table = filt_ileum_uni_taxa) +
+            ggtitle("Interaction")
+
+volcano <- ggarrange(volcano_1,volcano_2,volcano_3, ncol=3)
+volcano
+```
+
+##### MaAsLin2
+
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+fit_data = Maaslin2(
+    input_data = filt_ileum_uni_data, 
+    input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
+    min_prevalence = 0,min_variance = 0,
+    output = file.path(path_maaslin,group1), max_significance = 0.05,
+    fixed_effects = c('Group', 'Country'),correction = "BH")
+
+```
+
+```{r}
+volcano1 <- volcano_plot_maaslin(fit_data,filt_ileum_uni_taxa) + 
+            ggtitle(comparison_name)
+
+volcano2 <- volcano_plot_maaslin(fit_data,filt_ileum_uni_taxa,variable="Country") + 
+            ggtitle("Country effect")
+
+volcano <- ggarrange(volcano1,volcano2, ncol=2)
+volcano
+```
+
+##### Group - Intersection
+
+```{r}
+intersection_results <- group_intersection(group, list_intersections, list_venns,
+                                           linda.output, fit_data,
+                                           raw_linda_results_genus, 
+                                           segment = segment,
+                                           level=level)
+
+list_intersections <- intersection_results[[1]]
+list_venns <- intersection_results[[2]]
+venn <- intersection_results[[3]]
+
+# show the results
+venn
+```
+
+##### Country - Union
+
+```{r,eval=FALSE}
+list_country_union <- country_union(group,linda.output, fit_data,
+                                    segment=segment,
+                                    level=level)
+```
+
+##### Interaction effect
+
+```{r}
+list_interaction_significant <- country_interaction(group,
+                                                    linda.output, 
+                                                    list_intersections,
+                                          filt_ileum_uni_data,
+                                          filt_ileum_uni_metadata,
+                                          segment=segment,
+                                          level=level)
+
+# see the result
+## significant interaction effect
+list_interaction_significant[[1]]
+
+## results for czech cohort
+list_interaction_significant[[2]]
+
+## results for norwegian cohort
+list_interaction_significant[[3]]
+```
+
+Removing problematic taxa
+
+```{r}
+list_intersections <- removing_interaction_problems(group,
+                                                    list_interaction_significant,
+                                                    list_intersections,
+                                                    segment=segment,
+                                                    level=level)
+```
+
+##### Basic statistics
+
+```{r}
+uni_df <-  merge(basic_univariate_statistics(linda_data,group),
+                 raw_linda_results_genus[[segment]][[group1]],
+                 by="SeqID",all=TRUE)
+
+uni_df[["final_sig"]] <- uni_df$SeqID %in% list_intersections[[paste(segment,level,comparison_name)]][["SeqID"]]
+uni_statistics[[segment]][[paste(level,comparison_name)]] <- uni_df
+
+# for comparison
+new_name <- comparison_name
+addWorksheet(wb, sheetName = new_name)
+writeData(wb, sheet = new_name, uni_df, rowNames=FALSE)
+```
+
+#### Visualization
+
+Heatmap visualizing the linDA's logFoldChange for taxa with p \< 0.1.
+
+```{r, fig.width=10, fig.height=17, fig.fullwidth=TRUE}
+list_heatmap <- list_intersections[grep(paste(segment,level),
+                                  names(list_intersections),value=TRUE)]
+
+if (length((list_heatmap[[1]][[1]]))>1){
+  p_heatmap_linda <- heatmap_linda(list_heatmap,ileum_taxa_tab)
+  p_heatmap_linda
+}
+
+```
+
+Dot heatmap
+
+```{r, fig.width=5, fig.height=17, fig.fullwidth=TRUE}
+if (length((list_heatmap[[1]][[1]]))>0){
+dotheatmap_linda <- dot_heatmap_linda(list_heatmap,
+                                      uni_df,
+                                      ileum_taxa_tab)
+dotheatmap_linda
+
+}
+```
+
+**Horizontal bar plot**
+
+```{r}
+if (length((list_heatmap[[1]][[1]]))>0){
+p_prevalence <- horizontal_barplot(wb,taxa=levels(dotheatmap_linda$data$SeqID))
+
+p_prevalence_final <- ggarrange(p_prevalence,
+                                ggplot() + theme_minimal(),
+                                nrow = 2,heights = c(1,0.085))
+p <- ggarrange(dotheatmap_linda + theme(legend.position = "none"),p_prevalence_final,ncol=2,widths = c(1,0.2))
+p
+}
+```
+
+```{r,results='hide',eval=FALSE}
+pdf("../figures/Q3/dotplot_terminal_ileum.pdf",
+    height =10,width = 4)
+p
+dev.off()
+```
+
+
+#### Saving results
+
+```{r}
+# ALL DATA
+saveWorkbook(wb,file.path(path,paste0("uni_analysis_wb_",segment,".xlsx")),
+             overwrite = TRUE)
+
+# PSC effect
+write.xlsx(psc_effect[[paste(segment,level)]],file.path(path,paste0("psc_effect_",segment,".xlsx")))
+
+# SIGNIFICANT taxa
+
+write.xlsx(list_intersections[grepl(segment,names(list_intersections))] %>%
+            `names<-`(gsub(segment, "", names(
+              list_intersections[grepl(segment,names(list_intersections))]))),
+           file.path(path,paste0("significant_taxa_",segment,".xlsx")))
+```
+
+### Supplementary Analysis
+
+```{r}
+supplements_uni <- list()
+supplements_wb <- createWorkbook()
+```
+
+#### ASV level
+
+```{r}
+level="ASV"
+```
+
+```{r}
+path_maaslin="../intermediate_files/maaslin/Q3/ASV/"
+```
+
+```{r}
+raw_linda_results <- list();
+raw_linda_results[[segment]] <- list()
+linda_results <- list(); 
+linda_results[[segment]] <- list()
+```
+
+##### ibd vs no_ibd
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+**linDA**
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+
+# prepare the data
+linda_data <- binomial_prep(ileum_asv_tab,
+                            ileum_taxa_tab,
+                            ileum_metadata,
+                            group, usage="linDA")
+
+filt_ileum_uni_data <- linda_data[[1]]
+filt_ileum_uni_taxa <- linda_data[[2]]
+filt_ileum_uni_metadata <- linda_data[[3]]
+
+# fit the model
+linda.obj <- linda(filt_ileum_uni_data, 
+                   filt_ileum_uni_metadata, 
+                   formula = '~ Group * Country')
+
+linda.output <- linda.obj$output
+linda.output <- linda_renaming(linda.output, group)
+
+# save the results
+group1 <- paste0(group[1], " vs ","Group",group[2])
+group2 <- paste0(group[1], " , ",group[2], " - CZ vs NO") 
+group3 <- paste0(group[1], " vs ","Group",group[2], ":CountryNO")
+
+for (grp in c(group1,group2,group3)){
+  raw_linda_results[[segment]][[grp]] <- 
+    rawlinda.df(linda.output,
+                grp,
+                filt_ileum_uni_data,
+                filt_ileum_uni_taxa)
+  
+  linda_results[[segment]][[grp]] <- 
+    linda.df(linda.output,
+             grp,
+             filt_ileum_uni_data,
+             filt_ileum_uni_taxa)
+}
+
+```
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+# volcano plot
+volcano_1 <- volcano_plot_linda(linda.output, 
+                                group1, 
+                                taxa_table = filt_ileum_uni_taxa) + 
+            ggtitle(comparison_name)
+
+volcano_2  <- volcano_plot_linda(linda.output, group2, 
+                                taxa_table = filt_ileum_uni_taxa) + 
+            ggtitle("Country effect") 
+
+volcano_3 <- volcano_plot_linda(linda.output, group3, 
+                                taxa_table = filt_ileum_uni_taxa) +
+            ggtitle("Interaction")
+
+volcano <- ggarrange(volcano_1,volcano_2,volcano_3, ncol=3)
+volcano
+```
+
+ MaAsLin2
+
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+fit_data = Maaslin2(
+    input_data = filt_ileum_uni_data, 
+    input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
+    min_prevalence = 0,min_variance = 0,
+    output = file.path(path_maaslin,group1), max_significance = 0.05,
+    fixed_effects = c('Group', 'Country'),correction = "BH")
+
+```
+
+```{r}
+volcano1 <- volcano_plot_maaslin(fit_data,filt_ileum_uni_taxa) + 
+            ggtitle(comparison_name)
+
+volcano2 <- volcano_plot_maaslin(fit_data,filt_ileum_uni_taxa,variable="Country") + 
+            ggtitle("Country effect")
+
+volcano <- ggarrange(volcano1,volcano2, ncol=2)
+volcano
+```
+
+ Group - Intersection
+
+```{r}
+intersection_results <- group_intersection(group, list_intersections, list_venns,
+                                           linda.output, fit_data,
+                                           raw_linda_results, 
+                                           segment = segment,
+                                           level=level)
+
+list_intersections <- intersection_results[[1]]
+list_venns <- intersection_results[[2]]
+venn <- intersection_results[[3]]
+
+# show the results
+venn
+```
+
+Country - Union
+
+```{r,eval=FALSE}
+list_country_union <- country_union(group,linda.output, fit_data,
+                                    segment=segment,
+                                    level=level)
+```
+
+ Interaction effect
+
+```{r}
+list_interaction_significant <- country_interaction(group,
+                                                    linda.output, 
+                                                    list_intersections,
+                                          filt_ileum_uni_data,
+                                          filt_ileum_uni_metadata,
+                                          segment=segment,
+                                          level=level)
+
+# see the result
+## significant interaction effect
+list_interaction_significant[[1]]
+
+## results for czech cohort
+list_interaction_significant[[2]]
+
+## results for norwegian cohort
+list_interaction_significant[[3]]
+```
+
+Removing problematic taxa
+
+```{r}
+list_intersections <- removing_interaction_problems(group,
+                                                    list_interaction_significant,
+                                                    list_intersections,
+                                                    segment=segment,
+                                                    level=level)
+```
+
+ Basic statistics
+
+```{r}
+uni_df <-  merge(basic_univariate_statistics(linda_data,group),
+                 raw_linda_results[[segment]][[group1]],
+                 by="SeqID",all=TRUE)
+
+uni_df[["final_sig"]] <- uni_df$SeqID %in% list_intersections[[paste(segment,level,comparison_name)]][["SeqID"]]
+uni_statistics[[segment]][[paste(level,comparison_name)]] <- uni_df
+
+# for comparison
+new_name <- paste(level,comparison_name)
+addWorksheet(supplements_wb, sheetName = new_name)
+writeData(supplements_wb, sheet = new_name, uni_df, rowNames=FALSE)
+```
+
+
+##### Visualization
+
+Heatmap visualizing the linDA's logFoldChange for taxa with p \< 0.1.
+
+```{r, fig.width=10, fig.height=17, fig.fullwidth=TRUE}
+list_heatmap <- list_intersections[grep(paste(segment,level),
+                                  names(list_intersections),value=TRUE)]
+
+if (length((list_heatmap[[1]][[1]]))>1){
+p_heatmap_linda <- heatmap_linda(list_heatmap,ileum_taxa_tab)
+p_heatmap_linda
+}
+```
+
+Dot heatmap
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+if (length((list_heatmap[[1]][[1]]))>0){
+dotheatmap_linda <- dot_heatmap_linda(list_heatmap,
+                                      uni_df,
+                                      ileum_taxa_tab)
+dotheatmap_linda
+}
+```
+
+**Horizontal bar plot**
+
+```{r}
+if (length((list_heatmap[[1]][[1]]))>0){
+p_prevalence <- horizontal_barplot(wb,taxa=levels(dotheatmap_linda$data$SeqID))
+
+p_prevalence_final <- ggarrange(p_prevalence,
+                                ggplot() + theme_minimal(),
+                                nrow = 2,heights = c(1,0.085))
+p <- ggarrange(dotheatmap_linda + theme(legend.position = "none"),p_prevalence_final,ncol=2,widths = c(1,0.2))
+p
+}
+```
+
+#### Phylum level
+
+```{r}
+level="phylum"
+```
+
+```{r}
+path_maaslin="../intermediate_files/maaslin/Q3/Phylum/"
+```
+
+```{r}
+raw_linda_results_phylum <- list();
+raw_linda_results_phylum[[segment]] <- list()
+linda_results_phylum <- list(); 
+linda_results_phylum[[segment]] <- list()
+```
+
+Aggregate taxa
+
+```{r}
+phylum_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = "Phylum")
+
+ileum_phylum_tab <- phylum_data[[1]]
+ileum_phylum_taxa_tab <- phylum_data[[2]]
+
+```
+
+##### ibd vs no_ibd
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+**linDA**
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+
+# prepare the data
+linda_data <- binomial_prep(ileum_phylum_tab,
+                            ileum_phylum_taxa_tab,
+                            ileum_metadata,
+                            group, usage="linDA")
+
+filt_ileum_uni_data <- linda_data[[1]]
+filt_ileum_uni_taxa <- linda_data[[2]]
+filt_ileum_uni_metadata <- linda_data[[3]]
+
+# fit the model
+linda.obj <- linda(filt_ileum_uni_data, 
+                   filt_ileum_uni_metadata, 
+                   formula = '~ Group * Country')
+
+linda.output <- linda.obj$output
+linda.output <- linda_renaming(linda.output, group)
+
+# save the results
+group1 <- paste0(group[1], " vs ","Group",group[2])
+group2 <- paste0(group[1], " , ",group[2], " - CZ vs NO") 
+group3 <- paste0(group[1], " vs ","Group",group[2], ":CountryNO")
+
+for (grp in c(group1,group2,group3)){
+  raw_linda_results_phylum[[segment]][[grp]] <- 
+    rawlinda.df(linda.output,
+                grp,
+                filt_ileum_uni_data,
+                filt_ileum_uni_taxa)
+  
+  linda_results_phylum[[segment]][[grp]] <- 
+    linda.df(linda.output,
+             grp,
+             filt_ileum_uni_data,
+             filt_ileum_uni_taxa)
+}
+
+```
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+# volcano plot
+volcano_1 <- volcano_plot_linda(linda.output, 
+                                group1, 
+                                taxa_table = filt_ileum_uni_taxa) + 
+            ggtitle(comparison_name)
+
+volcano_2  <- volcano_plot_linda(linda.output, group2, 
+                                taxa_table = filt_ileum_uni_taxa) + 
+            ggtitle("Country effect") 
+
+volcano_3 <- volcano_plot_linda(linda.output, group3, 
+                                taxa_table = filt_ileum_uni_taxa) +
+            ggtitle("Interaction")
+
+volcano <- ggarrange(volcano_1,volcano_2,volcano_3, ncol=3)
+volcano
+```
+
+ MaAsLin2
+
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+fit_data = Maaslin2(
+    input_data = filt_ileum_uni_data, 
+    input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
+    min_prevalence = 0,min_variance = 0,
+    output = file.path(path_maaslin,group1), max_significance = 0.05,
+    fixed_effects = c('Group', 'Country'),correction = "BH")
+
+```
+
+```{r}
+volcano1 <- volcano_plot_maaslin(fit_data,filt_ileum_uni_taxa) + 
+            ggtitle(comparison_name)
+
+volcano2 <- volcano_plot_maaslin(fit_data,filt_ileum_uni_taxa,variable="Country") + 
+            ggtitle("Country effect")
+
+volcano <- ggarrange(volcano1,volcano2, ncol=2)
+volcano
+```
+
+Group - Intersection
+
+```{r}
+intersection_results <- group_intersection(group, list_intersections, list_venns,
+                                           linda.output, fit_data,
+                                           raw_linda_results_phylum, 
+                                           segment = segment,
+                                           level=level)
+
+list_intersections <- intersection_results[[1]]
+list_venns <- intersection_results[[2]]
+venn <- intersection_results[[3]]
+
+# show the results
+venn
+```
+
+ Country - Union
+
+```{r,eval=FALSE}
+list_country_union <- country_union(group,linda.output, fit_data,
+                                    segment=segment,
+                                    level=level)
+```
+
+ Interaction effect
+
+```{r}
+list_interaction_significant <- country_interaction(group,
+                                                    linda.output, 
+                                                    list_intersections,
+                                          filt_ileum_uni_data,
+                                          filt_ileum_uni_metadata,
+                                          segment=segment,
+                                          level=level)
+
+# see the result
+## significant interaction effect
+list_interaction_significant[[1]]
+
+## results for czech cohort
+list_interaction_significant[[2]]
+
+## results for norwegian cohort
+list_interaction_significant[[3]]
+```
+
+Removing problematic taxa
+
+```{r}
+list_intersections <- removing_interaction_problems(group,
+                                                    list_interaction_significant,
+                                                    list_intersections,
+                                                    segment=segment,
+                                                    level=level)
+```
+
+ Basic statistics
+
+```{r}
+uni_df <-  merge(basic_univariate_statistics(linda_data,group),
+                 raw_linda_results_phylum[[segment]][[group1]],
+                 by="SeqID",all=TRUE)
+
+uni_df[["final_sig"]] <- uni_df$SeqID %in% list_intersections[[paste(segment,level,comparison_name)]][["SeqID"]]
+uni_statistics[[segment]][[paste(level,comparison_name)]] <- uni_df
+
+# for comparison
+new_name <- paste(level,comparison_name)
+addWorksheet(supplements_wb, sheetName = new_name)
+writeData(supplements_wb, sheet = new_name, uni_df, rowNames=FALSE)
+```
+
+
+##### Visualization
+
+Heatmap visualizing the linDA's logFoldChange for taxa with p \< 0.1.
+
+```{r, fig.width=10, fig.height=17, fig.fullwidth=TRUE}
+list_heatmap <- list_intersections[grep(paste(segment,level),
+                                  names(list_intersections),value=TRUE)]
+
+if (length((list_heatmap[[1]][[1]]))>1){
+p_heatmap_linda <- heatmap_linda(list_heatmap,ileum_taxa_tab)
+p_heatmap_linda
+}
+```
+
+Dot heatmap
+
+```{r, fig.width=5, fig.height=17, fig.fullwidth=TRUE}
+if (length((list_heatmap[[1]][[1]]))>1){
+dotheatmap_linda <- dot_heatmap_linda(list_heatmap,
+                                      uni_df,
+                                      ileum_taxa_tab)
+dotheatmap_linda
+}
+```
+
+
+#### Saving results
+
+```{r}
+# ALL DATA
+saveWorkbook(supplements_wb,file.path(path,paste0("supplements_uni_analysis_wb_",segment,".xlsx")),overwrite = TRUE)
+
+# SIGNIFICANT taxa
+write.xlsx(list_intersections[grepl(segment,names(list_intersections))] %>%
+            `names<-`(gsub(segment, "", names(
+              list_intersections[grepl(segment,names(list_intersections))]))),
+           file.path(path,paste0("supplements_significant_taxa_",segment,".xlsx")))
+```
+
+
+## Machine learning
+
+```{r}
+path = "../results/Q3/models"
+```
+
+### ElasticNet
+
+```{r}
+model="enet"
+```
+
+#### ASV level
+
+```{r}
+level="ASV"
+```
+
+##### ibd vs no_ibd
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_asv_tab,
+                                     ileum_taxa_tab,
+                                     ileum_metadata,
+                                     group, usage="ml_clr")
+
+# fit the model
+enet_model <- glmnet_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ <- list()
+models_cm <- list()
+betas <- list()
+roc_cs <- list()
+
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+roc_c
+```
+
+#### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+##### ibd vs no_ibd
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+enet_model <- glmnet_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+
+roc_c
+```
+
+#### Saving results
+
+```{r}
+models_summ_df_ileum <- do.call(rbind, 
+  models_summ[grep(segment,names(models_summ),value = TRUE)])
+
+write.csv(models_summ_df_ileum,file.path(path,paste0("elastic_net_",segment,".csv")))
+```
+
+
+### Supplementary models
+
+```{r}
+supplements_models <- list()
+```
+
+#### CLR-transformed data
+
+##### kNN
+
+```{r}
+model="knn"
+```
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_asv_tab,
+                                     ileum_taxa_tab,
+                                     ileum_metadata,
+                                     group, usage="ml_clr")
+
+# fit the model
+knn_model <- knn_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+knn_model <- knn_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+
+##### Random Forest
+
+```{r}
+model="rf"
+```
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_asv_tab,
+                                     ileum_taxa_tab,
+                                     ileum_metadata,
+                                     group, usage="ml_clr")
+
+# fit the model
+rf_model <- rf_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+rf_model <- rf_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+
+##### Gradient boosting
+
+```{r}
+model="gb"
+```
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_asv_tab,
+                                     ileum_taxa_tab,
+                                     ileum_metadata,
+                                     group, usage="ml_clr")
+
+# fit the model
+gbm_model <- gbm_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+gbm_model <- gbm_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                             reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+
+#### Relative abundances
+
+##### Elastic net
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_asv_tab,
+                                     ileum_taxa_tab,
+                                     ileum_metadata,
+                                     group, usage="ml_ra")
+
+# fit the model
+enet_model <- glmnet_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["enet_model_ra"]][[model_name]] <- enet_model$model_summary
+
+supplements_models[["roc_cs"]][["enet_model_ra"]][[model_name]] <- enet_model$kfold_rocobjs
+
+# see the results
+enet_model$model_summary %>% t()
+roc_c
+```
+
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_ra")
+
+# fit the model
+enet_model <- glmnet_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["enet_model_ra"]][[model_name]] <- enet_model$model_summary
+
+supplements_models[["roc_cs"]][["enet_model_ra"]][[model_name]] <- enet_model$kfold_rocobjs
+
+# see the results
+enet_model$model_summary %>% t()
+roc_c
+```
+
+##### kNN
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_asv_tab,
+                                     ileum_taxa_tab,
+                                     ileum_metadata,
+                                     group, usage="ml_ra")
+
+# fit the model
+knn_model <- knn_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model_ra"]][[model_name]] <- knn_model$model_summary
+
+supplements_models[["roc_cs"]][["knn_model_ra"]][[model_name]] <- knn_model$kfold_rocobjs
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_ra")
+
+# fit the model
+knn_model <- knn_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model_ra"]][[model_name]] <- knn_model$model_summary
+
+supplements_models[["roc_cs"]][["knn_model_ra"]][[model_name]] <- knn_model$kfold_rocobjs
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+##### Random Forest
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_asv_tab,
+                                     ileum_taxa_tab,
+                                     ileum_metadata,
+                                     group, usage="ml_ra")
+
+# fit the model
+rf_model <- rf_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model_ra"]][[model_name]] <- rf_model$model_summary
+
+supplements_models[["roc_cs"]][["rf_model_ra"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_ra")
+
+# fit the model
+rf_model <- rf_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model_ra"]][[model_name]] <- rf_model$model_summary
+
+supplements_models[["roc_cs"]][["rf_model_ra"]][[model_name]] <- rf_model$kfold_rocobjs
+
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+
+##### Gradient boosting
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_asv_tab,
+                                     ileum_taxa_tab,
+                                     ileum_metadata,
+                                     group, usage="ml_ra")
+
+# fit the model
+gbm_model <- gbm_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model_ra"]][[model_name]] <- gbm_model$model_summary
+
+supplements_models[["roc_cs"]][["gbm_model_ra"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+***ibd vs no_ibd***
+
+```{r}
+group <- c("ibd","no_ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_ra")
+
+# fit the model
+gbm_model <- gbm_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model_ra"]][[model_name]] <- gbm_model$model_summary
+
+supplements_models[["roc_cs"]][["gbm_model_ra"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+#### Saving results
+
+```{r}
+models_list <- list()
+
+for (model_name in names(supplements_models$models_summ)){
+  df <- do.call(rbind, supplements_models$models_summ[[model_name]])
+  models_list[[model_name]] <- df
+}
+
+write.xlsx(models_list,
+           file=file.path(path,paste0("supplements_models_",segment,".xlsx")),
+           rowNames=TRUE)
+
+```
+
+## Results overview
+
+#### Alpha diversity
+
+```{r}
+pc_observed[[segment]]
+pc_shannon[[segment]]
+pc_simpson[[segment]]
+pc_pielou[[segment]]
+```
+
+Plots
+
+```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE}
+alpha_div_plots[[paste(segment,"Country")]]
+```
+
+```{r, fig.width=7, fig.height=4, fig.fullwidth=TRUE}
+alpha_div_plots[[paste(segment,"Custom")]]
+```
+
+#### Beta diversity
+
+**Main results**
+
+```{r}
+pairwise_aitchison_raw[[paste("genus", segment)]]
+```
+
+PCA
+
+```{r, fig.width=5, fig.height=3, fig.fullwidth=TRUE, eval=TRUE}
+pca_plots_list[[paste(segment,"genus custom")]]
+```
+
+**Supplements**
+
+```{r}
+knitr::kable(supplements_beta[!grepl("PCoA",names(supplements_beta))],
+             digits = 3,
+             caption = "Supplementary PERMANOVA results")
+```
+
+PCA
+
+```{r, fig.width=8, fig.height=7, fig.fullwidth=TRUE, eval=FALSE}
+ggarrange(plotlist = supplements_beta[grepl("PCoA",names(supplements_beta))],
+          labels=names(supplements_beta[grepl("PCoA",names(supplements_beta))]),
+          font.label = list(size=5,face="plain"),
+          ncol=2,nrow=3)
+```
+
+#### Univariate analysis
+
+**Number of significant taxa**
+
+```{r}
+knitr::kable(as.data.frame(lapply(list_intersections,nrow)) %>% t() %>% 
+  `colnames<-`("Count") %>% 
+  `rownames<-`(c(names(list_intersections))),caption="Number of significant taxa")
+```
+
+**Counts**
+
+```{r, eval=FALSE}
+# univar_list <- univariate_statistics(list_intersections,
+#                                      psc_effect,
+#                                      ileum_genus_asv_taxa_tab)
+# 
+# univar_df <- univar_list[[1]]
+# wb <- univar_list[[2]]
+# 
+# # save the results
+# saveWorkbook(wb,"results/Q3/DAA_final_terminal_ileum.xlsx", overwrite = TRUE)
+# 
+# # see the results
+# univar_df
+```
+
+#### Machine learning
+
+**Main models**
+
+Summary
+
+```{r}
+knitr::kable(models_summ_df_ileum %>% dplyr::select(
+"alpha","lambda",
+"auc_optimism_corrected",
+"auc_optimism_corrected_CIL",
+"auc_optimism_corrected_CIU"),
+             digits=2,caption="Elastic net results")
+```
+
+**ROC - ASV level**
+
+```{r}
+roc_curve_all_custom(roc_cs[1], 
+                     Q="Q3",
+                     model_name="enet_model")
+```
+
+**ROC - Genus level**
+
+```{r}
+roc_curve_all_custom(roc_cs[2],Q="Q3",
+                     model_name="enet_model")
+```
+
+**Supplementary models**
+
+Summary
+
+```{r}
+# Build final dataframe
+models_list[["enet_model"]] <- models_summ_df_ileum
+final_df <- tibble(row_names = rownames(models_list[[1]]))
+
+# Loop through models and extract required values
+for (model_name in names(models_list)) {
+  model_df <- models_list[[model_name]]
+  
+  # Combine AUC_optimism_corrected with its CI values
+  final_df[[model_name]] <- paste0(
+    round(model_df$auc_optimism_corrected, 3), 
+    " (", round(model_df$auc_optimism_corrected_CIL, 3), "; ", 
+    round(model_df$auc_optimism_corrected_CIU, 3), ")"
+  )
+}
+
+knitr::kable(final_df, caption="All models")
+```
+
+ROC - ASV
+
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+rocs_list <- supplements_models$roc_cs
+rocs_list[["enet_model"]] <- roc_cs
+
+plot_list <- list()
+
+for (model_name in names(rocs_list)) {
+  plot_list[[model_name]] <- roc_curve_all_custom(rocs_list[[model_name]][1],
+                       Q="Q3",
+                       model_name=model_name)
+}
+
+ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=7))
+```
+
+ROC - genus
+
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+plot_list <- list()
+
+for (model_name in names(rocs_list)) {
+  plot_list[[model_name]] <- roc_curve_all_custom(rocs_list[[model_name]][2],
+                       Q="Q3",
+                       model_name=model_name)
+}
+
+p <- ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=5))
+```
+
+```{r,results='hide'}
+pdf("../figures/Q3/models_terminal_ileum.pdf",
+    height =10,width = 10)
+p
+dev.off()
+```
+
+
+# Analysis - Colon
+
+```{r}
+segment="colon"
+```
+
+## Filtering
+
+Rules: - prevalence \> 5% (per group) - nearZeroVar with default
+settings - sequencing depth \> 5000 - taxonomic assignment at least
+order
+
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(colon_asv_tab, line = c(5000,10000))
+```
+
+### Sequencing depth
+
+```{r}
+data_filt <- seq_depth_filtering(colon_asv_tab,
+                                 colon_taxa_tab,
+                                 colon_metadata,
+                                 seq_depth_threshold = 10000)
+
+filt_colon_asv_tab <- data_filt[[1]]; alpha_colon_asv_tab <- filt_colon_asv_tab
+filt_colon_taxa_tab <- data_filt[[2]]; alpha_colon_taxa_tab <- filt_colon_taxa_tab
+filt_colon_metadata <- data_filt[[3]]; alpha_colon_metadata <- filt_colon_metadata
+
+seq_step <- dim(filt_colon_asv_tab)[1]
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_colon_asv_tab,line = c(10000))
+```
+
+### NearZeroVar
+
+```{r}
+data_filt <- nearzerovar_filtering(filt_colon_asv_tab,
+                                   filt_colon_taxa_tab,
+                                   filt_colon_metadata)
+
+filt_colon_asv_tab <- data_filt[[1]]
+filt_colon_taxa_tab <- data_filt[[2]]
+nearzero_step <- dim(filt_colon_asv_tab)[1]
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_colon_asv_tab,line = c(5000,10000))
+```
+
+Check zero depth
+
+```{r}
+data_filt <- check_zero_depth(filt_colon_asv_tab, 
+                              filt_colon_taxa_tab, 
+                              filt_colon_metadata)
+
+filt_colon_asv_tab <- data_filt[[1]]; 
+filt_colon_taxa_tab <- data_filt[[2]]; 
+filt_colon_metadata <- data_filt[[3]]; 
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_colon_asv_tab,line = c(5000,10000))
+```
+
+### Final Counts
+
+```{r}
+final_counts_filtering(colon_asv_tab,
+                       filt_colon_asv_tab,
+                       filt_colon_metadata,
+                       seq_step, 0, nearzero_step)
+```
+
+## Alpha diversity
+
+```{r}
+path = "../results/Q3/alpha_diversity"
+```
+
+**Calculation**
+
+```{r}
+# Construct MPSE object
+alpha_colon_metadata$Sample <- alpha_colon_metadata$SampleID
+colon_mpse <- as.MPSE(construct_phyloseq(alpha_colon_asv_tab,
+                                         alpha_colon_taxa_tab,
+                                         alpha_colon_metadata))
+
+colon_mpse %<>% mp_rrarefy(raresize = 10000,seed = 123)
+
+# Calculate alpha diversity - rarefied counts
+colon_mpse %<>% mp_cal_alpha(.abundance=RareAbundance, force=TRUE)
+```
+
+```{r}
+alpha_data <- data.frame(SampleID=colon_mpse$Sample.x,
+                         Observe=colon_mpse$Observe,
+                         Shannon=colon_mpse$Shannon,
+                         Simpson=colon_mpse$Simpson,
+                         Pielou=colon_mpse$Pielou,
+                         Group=colon_mpse$Group,
+                         Country=colon_mpse$Country,
+                         Patient=colon_mpse$Patient)
+
+write.csv(alpha_data,file.path(path,paste0("alpha_indices_",segment,".csv")),
+          row.names = FALSE)
+```
+
+**Plots**
+
+### Country plot
+
+```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE}
+p_boxplot_alpha <- alpha_diversity_countries(alpha_data)
+
+# save the results
+alpha_div_plots[[paste(segment,"Country")]] <- p_boxplot_alpha
+
+# see the results
+p_boxplot_alpha
+```
+
+```{r,results='hide'}
+pdf("../figures/Q3/alpha_diversity_colon.pdf",
+    height =4,width = 7)
+p_boxplot_alpha
+dev.off()
+```
+
+### Custom plot
+
+```{r}
+alpha_data <- alpha_data %>% 
+  dplyr::select(-c("Simpson","Pielou")) %>%
+  mutate(Richness=Observe)
+
+p_B <- alpha_diversity_custom_2(alpha_data,
+                                size = 1.5,
+                                width = 0.3)
+
+# save the results
+alpha_div_plots[[paste(segment,"Custom")]] <- p_B
+
+p_B
+```
+
+### Linear Model
+
+```{r}
+path = "../results/Q3/alpha_diversity"
+alpha_data <- read.csv(file.path(path,paste0("alpha_indices_",segment,".csv")))
+```
+
+**Richness**
+
+```{r}
+results_model <- pairwise.lmer(
+  formula = "Observe ~ Group * Country + (1|Patient)",
+  factors=alpha_data$Group,
+  data=alpha_data)
+
+# check interaction
+if (!is.data.frame(results_model)){
+  results_model_observe <- results_model[[1]]
+  results_model_observe_detailed <- results_model[[2]]
+} else {
+  results_model_observe <- results_model
+  results_model_observe_detailed <- NA
+}
+
+# save the results
+pc_observed[[segment]] <- results_model_observe
+```
+
+```{r}
+# see the results
+knitr::kable(results_model_observe,digits = 3,
+caption = "Raw results of linear model of richness estimation.")
+
+knitr::kable(results_model_observe_detailed,digits = 3,
+caption = "Raw results of independent country analysis")
+```
+
+**Shannon**
+
+```{r}
+results_model <- pairwise.lmer(
+  formula = "Shannon ~ Group * Country + (1|Patient)",
+  factors=alpha_data$Group,
+  data=alpha_data)
+
+# check interaction
+if (!is.data.frame(results_model)){
+  results_model_shannon <- results_model[[1]]
+  results_model_shannon_detailed <- results_model[[2]]
+} else {
+  results_model_shannon <- results_model
+  results_model_shannon_detailed <- NA
+}
+
+# save the results
+pc_shannon[[segment]] <- as.data.frame(results_model_shannon)
+
+```
+
+```{r}
+# see the results
+knitr::kable(results_model_shannon,digits = 3,
+caption = "Raw results of linear model of Shannon estimation.")
+
+knitr::kable(results_model_shannon_detailed,digits = 3,
+caption = "Raw results of independent country analysis")
+```
+
+**Simpson**
+
+```{r}
+results_model <- pairwise.lmer(
+  formula = "Simpson ~ Group * Country + (1|Patient)",
+  factors=alpha_data$Group,
+  data=alpha_data)
+
+# check interaction
+if (!is.data.frame(results_model)){
+  results_model_simpson <- results_model[[1]]
+  results_model_simpson_detailed <- results_model[[2]]
+} else {
+  results_model_simpson <- results_model
+  results_model_simpson_detailed <- NA
+}
+
+# save the results
+pc_simpson[[segment]] <- as.data.frame(results_model_simpson)
+
+```
+
+```{r}
+# see the results
+knitr::kable(results_model_simpson,digits = 3,
+caption = "Raw results of linear model of Simpson estimation.")
+
+knitr::kable(results_model_simpson_detailed,digits = 3,
+caption = "Raw results of independent country analysis")
+```
+
+**Pielou**
+
+```{r}
+results_model <- pairwise.lmer(
+  formula = "Pielou ~ Group * Country + (1|Patient)",
+  factors=alpha_data$Group,
+  data=alpha_data)
+
+# check interaction
+if (!is.data.frame(results_model)){
+  results_model_pielou <- results_model[[1]]
+  results_model_pielou_detailed <- results_model[[2]]
+} else {
+  results_model_pielou <- results_model
+  results_model_pielou_detailed <- NA
+}
+
+# save the results
+pc_pielou[[segment]] <- as.data.frame(results_model_pielou)
+
+```
+
+```{r}
+# see the results
+knitr::kable(results_model_pielou,digits = 3,
+caption = "Raw results of linear model of Pielou estimation.")
+
+knitr::kable(results_model_pielou_detailed,digits = 3,
+caption = "Raw results of independent country analysis")
+```
+
+### Saving results
+
+```{r}
+alpha_list <- list(
+  Richness=pc_observed[[segment]] %>% rownames_to_column("Comparison"),
+  Shannon=pc_shannon[[segment]] %>% rownames_to_column("Comparison"),
+  Simpson=pc_simpson[[segment]] %>% rownames_to_column("Comparison"),
+  Pielou=pc_pielou[[segment]] %>% rownames_to_column("Comparison"))
+                   
+write.xlsx(alpha_list, 
+           file = file.path(path,paste0("alpha_diversity_results_",segment,".xlsx")))
+```
+
+## Beta diversity
+
+Calculating Aitchison distance (euclidean distance on clr-transformed
+data), both at ASV and genus level.
+
+### Main analysis - Genus, Aitchison
+
+**Genus level, Aitchison distance**
+
+```{r}
+level="genus"
+```
+
+```{r}
+path = "../results/Q3/beta_diversity"
+```
+
+Aggregation, filtering
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level=level,
+                             names=TRUE)
+
+filt_data <- filtering_steps(genus_data[[1]],
+                             genus_data[[2]],
+                             colon_metadata,
+                            seq_depth_threshold=10000)
+
+filt_colon_genus_tab <- filt_data[[1]]
+filt_colon_genus_taxa <- filt_data[[2]]
+filt_colon_genus_metadata <- filt_data[[3]]
+```
+
+##### PERMANOVA
+
+```{r}
+pairwise_df <- filt_colon_genus_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(pairwise_df,filt_colon_genus_metadata$Group,
+                           covariate = filt_colon_genus_metadata$Country, 
+                           patients = filt_colon_genus_metadata$Patient,
+                           sim.method = "robust.aitchison", p.adjust.m="BH")
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,filt_colon_genus_metadata$Group,
+                          covariate = filt_colon_genus_metadata$Country, 
+                          interaction = TRUE, 
+                          patients = filt_colon_genus_metadata$Patient,
+                          sim.method = "robust.aitchison", p.adjust.m="BH")
+
+# tidy the results
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+pairwise_aitchison_raw[[paste(level, segment)]] <-rbind(pp_factor,pp_cov,pp_fac.cov)
+
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.1]
+
+if (length(interaction_sig)>0){
+ for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_colon_genus_metadata$Group,
+                      covariate = filt_colon_genus_metadata$Country, 
+                      group1 = group1,
+                      group2 = group2,
+                      patients = filt_colon_genus_metadata$Patient)
+  print(result_list)
+} 
+}
+
+```
+
+##### Plots
+
+**PCoA custom**
+
+```{r}
+p <- pca_plot_custom(filt_colon_genus_tab,
+                                 filt_colon_genus_taxa,
+                                 filt_colon_genus_metadata,
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=2, 
+                                 show_legend=TRUE)
+
+# save the results
+pca_plots_list[[paste(segment,level,"custom")]] <- p
+
+# see the results
+p
+
+```
+
+```{r,results='hide'}
+pdf("../figures/Q3/beta_diversity_colon.pdf",
+    height =5,width = 5)
+p
+dev.off()
+```
+
+#### Saving results
+
+```{r}
+write.xlsx(pairwise_aitchison_raw[[paste(level, segment)]], 
+           file = file.path(path,
+           paste0("beta_diversity_results_", segment,".xlsx")))
+```
+
+### Supplementary analysis
+
+#### Genus level
+
+```{r}
+level="genus"
+```
+
+##### Bray-Curtis
+
+**PERMANOVA**
+
+```{r}
+pairwise_df <- filt_colon_genus_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(pairwise_df,
+                           filt_colon_genus_metadata$Group,
+                           covariate = filt_colon_genus_metadata$Country, 
+                           patients = filt_colon_genus_metadata$Patient,
+                           sim.method = "bray", p.adjust.m="BH")
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,
+                          filt_colon_genus_metadata$Group,
+                          covariate = filt_colon_genus_metadata$Country, 
+                          patients = filt_colon_genus_metadata$Patient,
+                          interaction = TRUE, sim.method = "bray", p.adjust.m="BH")
+
+# tidy the results
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+supplements_beta[[paste("bray",level,segment)]] <- rbind(pp_factor,pp_cov,pp_fac.cov)
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+
+if (length(interaction_sig)>0){
+for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_colon_genus_metadata$Group,
+                      covariate = filt_colon_genus_metadata$Country, 
+                      patients = filt_colon_genus_metadata$Patient,
+                      group1 = group1,
+                      group2 = group2,
+                      sim.method = 'bray')
+  print(result_list)
+}
+}
+```
+
+**Plots**
+
+```{r}
+p <- pca_plot_custom(filt_colon_genus_tab,
+                                 filt_colon_genus_taxa,
+                                 filt_colon_genus_metadata,
+                                 measure = "bray",
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=3, show_legend=TRUE)
+
+# save the results
+supplements_beta[[paste("PCoA bray",level,segment)]] <- p
+
+# see the results
+p
+```
+
+##### Jaccard
+
+**PERMANOVA**
+
+```{r}
+pairwise_df <- filt_colon_genus_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(pairwise_df,
+                           filt_colon_genus_metadata$Group,
+                           covariate = filt_colon_genus_metadata$Country,
+                           patients = filt_colon_genus_metadata$Patient,
+                           sim.method = "jaccard", p.adjust.m="BH")
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,
+                          filt_colon_genus_metadata$Group,
+                          covariate = filt_colon_genus_metadata$Country,
+                          patients = filt_colon_genus_metadata$Patient,
+                          interaction = TRUE, sim.method = "jaccard", p.adjust.m="BH")
+
+# tidy the results
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+supplements_beta[[paste("jaccard",level,segment)]] <- rbind(pp_factor, 
+                                                            pp_cov, 
+                                                            pp_fac.cov)
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+
+if (length(interaction_sig)>0){
+for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_colon_genus_metadata$Group,
+                      covariate = filt_colon_genus_metadata$Country, 
+                      patients = filt_colon_genus_metadata$Patient,
+                      group1 = group1,
+                      group2 = group2,
+                      sim.method = 'jaccard')
+  print(result_list)
+}
+}
+```
+
+**Plots**
+
+*Custom*
+
+```{r}
+p <- pca_plot_custom(filt_colon_genus_tab,
+                                 filt_colon_genus_taxa,
+                                 filt_colon_genus_metadata,
+                                 measure = "jaccard",
+                                 show_boxplots = TRUE,
+                                 variable = "Group", size=3, show_legend=TRUE)
+
+# save the results
+supplements_beta[[paste("PCoA jaccard",level,segment)]] <- p
+
+# see the results
+p
+```
+
+#### ASV level
+
+```{r}
+level="ASV"
+```
+
+##### Aitchison
+
+```{r}
+# preparing data frame
+pairwise_df <- filt_colon_asv_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(x=pairwise_df,
+                          filt_colon_metadata$Group,
+                           covariate = filt_colon_metadata$Country, 
+                           sim.method = "robust.aitchison", 
+                           p.adjust.m="BH",
+                           patients = filt_colon_metadata$Patient)
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,filt_colon_metadata$Group,
+                          covariate = filt_colon_metadata$Country, 
+                          interaction = TRUE, 
+                          sim.method = "robust.aitchison", 
+                          p.adjust.m="BH",
+                          patients = filt_colon_metadata$Patient)
+
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+supplements_beta[[paste("aitchison",level,segment)]] <- rbind(pp_factor, 
+                                                            pp_cov, 
+                                                            pp_fac.cov)
+
+# see the results
+pp_factor
+pp_cov
+pp_fac.cov
+
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+
+if (length(interaction_sig)>0){
+ for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_colon_metadata$Group,
+                      covariate = filt_colon_metadata$Country, 
+                      group1 = group1,
+                      group2 = group2,
+                      patients = filt_colon_metadata$Patient)
+  print(result_list)
+} 
+}
+```
+
+**PCoA**
+
+```{r}
+p <- pca_plot_custom(filt_colon_asv_tab,
+                           filt_colon_taxa_tab,
+                           filt_colon_metadata,
+                           show_boxplots = TRUE,
+                           variable = "Group", 
+                           size=3, 
+                           show_legend=TRUE)
+
+# save the results
+supplements_beta[[paste("PCoA aitchison",level,segment)]] <- p
+
+# see the results
+p
+```
+
+##### Bray-Curtis 
+
+*PERMANOVA*
+
+```{r}
+# preparing data frame
+pairwise_df <- filt_colon_asv_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(pairwise_df,
+                           filt_colon_metadata$Group,
+                           covariate = filt_colon_metadata$Country,
+                           patients = filt_colon_metadata$Patient,
+                           sim.method = "bray", p.adjust.m="BH")
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,
+                          filt_colon_metadata$Group,
+                          covariate = filt_colon_metadata$Country, 
+                          patients = filt_colon_metadata$Patient,
+                          interaction = TRUE, sim.method = "bray", p.adjust.m="BH")
+
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+supplements_beta[[paste("bray",level,segment)]] <- rbind(pp_factor, 
+                                                            pp_cov, 
+                                                            pp_fac.cov)
+
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+
+if (length(interaction_sig)>0){
+for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_colon_metadata$Group,
+                      covariate = filt_colon_metadata$Country, 
+                      group1 = group1,
+                      group2 = group2,
+                      patients = filt_colon_metadata$Patient,
+                      sim.method = 'bray')
+  print(result_list)
+}
+}
+```
+
+**PCoA**
+
+```{r}
+p <- pca_plot_custom(filt_colon_asv_tab,
+                     filt_colon_taxa_tab,
+                     filt_colon_metadata,
+                     measure = "bray",
+                     show_boxplots = TRUE,
+                     variable = "Group", size=3, show_legend=TRUE)
+
+# save the results
+supplements_beta[[paste("PCoA bray",level,segment)]] <- p
+
+# see the results
+p
+```
+
+##### Jaccard
+
+*PERMANOVA*
+
+```{r}
+# preparing data frame
+pairwise_df <- filt_colon_asv_tab %>% column_to_rownames("SeqID") %>% t()
+
+# main effect
+pp_main <- pairwise.adonis(pairwise_df,
+                           filt_colon_metadata$Group,
+                           covariate = filt_colon_metadata$Country,
+                           patients = filt_colon_metadata$Patient,
+                           sim.method = "jaccard", p.adjust.m="BH")
+
+# interaction
+pp_int <- pairwise.adonis(pairwise_df,
+                          filt_colon_metadata$Group,
+                          covariate = filt_colon_metadata$Country, 
+                          patients = filt_colon_metadata$Patient,
+                          interaction = TRUE, sim.method = "jaccard", p.adjust.m="BH")
+
+pp_factor <- pp_main[[1]]
+pp_cov <- pp_main[[2]]
+pp_fac.cov <- pp_int[[3]]
+
+cols <- c("pairs","Df","SumsOfSqs", "F.Model","R2","p.value", "p.adjusted", "sig")
+colnames(pp_factor) <- cols; colnames(pp_cov) <- cols; colnames(pp_fac.cov) <- cols; 
+
+# save raw results
+supplements_beta[[paste("jaccard",level,segment)]] <- rbind(pp_factor, 
+                                                            pp_cov, 
+                                                            pp_fac.cov)
+```
+
+```{r}
+# see the results
+knitr::kable(pp_factor,digits = 3,caption = "PERMANOVA, GROUP separation")
+knitr::kable(pp_cov,digits = 3,caption = "PERMANOVA, COUNTRY separation")
+knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Country")
+```
+
+Interaction check
+
+```{r}
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+
+if (length(interaction_sig)>0){
+for (i in 1:length(interaction_sig)){
+  group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
+  group2 <- unlist(strsplit(interaction_sig[i],split = " vs "))[2]
+  group2 <- unlist(strsplit(group2,split = " : "))[1]
+  
+  result_list <- adonis_postanalysis(x=pairwise_df,
+                      factors = filt_colon_metadata$Group,
+                      covariate = filt_colon_metadata$Country, 
+                      patients = filt_colon_metadata$Patient,
+                      group1 = group1,
+                      group2 = group2,
+                      sim.method = 'jaccard')
+  print(result_list)
+}
+}
+```
+
+**PCoA**
+
+```{r}
+p <- pca_plot_custom(filt_colon_asv_tab,
+                     filt_colon_taxa_tab,
+                     filt_colon_metadata,
+                     measure = "jaccard",
+                     show_boxplots = TRUE,
+                     variable = "Group", size=3, show_legend=TRUE)
+
+# save the results
+supplements_beta[[paste("PCoA jaccard",level,segment)]] <- p
+
+# see the results
+p
+```
+
+#### Saving results
+
+```{r}
+write.xlsx(supplements_beta[!grepl("PCoA",names(supplements_beta))],
+           file = file.path(path,
+           paste0("supplements_beta_diversity_", segment,".xlsx")))
+```
+
+## Univariate Analysis
+
+### Main - Genus level
+
+```{r}
+level="genus"
+```
+
+```{r}
+# needed paths
+path = "../results/Q3/univariate_analysis"
+path_maaslin=file.path("../intermediate_files/maaslin/Q3",level)
+```
+
+```{r}
+# variables
+raw_linda_results_genus[[segment]] <- list()
+linda_results_genus[[segment]] <- list()
+
+# country and interaction problems
+list_country_union <- list()
+list_intersections <- list()
+list_venns <- list()
+uni_statistics <- list()
+
+# workbook for final df
+wb <- createWorkbook()
+
+# PSC effect
+psc_effect <- list()
+```
+
+#### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+
+colon_genus_asv_taxa_tab <- create_asv_taxa_table(colon_genus_tab,
+                                                  colon_genus_taxa_tab)
+```
+
+##### ibd vs no_ibd
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+###### linda
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+
+# prepare the data
+linda_data <- binomial_prep(colon_genus_tab,
+                            colon_genus_taxa_tab,
+                            colon_metadata,
+                            group, usage="linDA")
+
+filt_colon_uni_data <- linda_data[[1]]
+filt_colon_uni_taxa <- linda_data[[2]]
+filt_colon_uni_metadata <- linda_data[[3]]
+
+# fit the model
+linda.obj <- linda(filt_colon_uni_data,
+                   filt_colon_uni_metadata,
+                   formula = '~ Group * Country + (1|Patient)')
+
+linda.output <- linda.obj$output
+linda.output <- linda_renaming(linda.output, group)
+
+# save the results
+group1 <- paste0(group[1], " vs ","Group",group[2])
+group2 <- paste0(group[1], " , ",group[2], " - CZ vs NO") 
+group3 <- paste0(group[1], " vs ","Group",group[2], ":CountryNO")
+
+
+for (grp in c(group1,group2,group3)){
+  raw_linda_results_genus[[segment]][[grp]] <- 
+    rawlinda.df(linda.output,
+                grp,
+                filt_colon_uni_data,
+                filt_colon_uni_taxa)
+  
+  linda_results_genus[[segment]][[grp]] <- 
+    linda.df(linda.output,
+             grp,
+             filt_colon_uni_data,
+             filt_colon_uni_taxa)
+}
+```
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+# volcano plot
+volcano_1 <- volcano_plot_linda(linda.output, group1, 
+                                taxa_table = filt_colon_uni_taxa) + 
+            ggtitle(paste(group,collapse=" vs "))
+
+volcano_2  <- volcano_plot_linda(linda.output, group2, 
+                                taxa_table = filt_colon_uni_taxa) + 
+            ggtitle("Country effect") 
+
+volcano_3 <- volcano_plot_linda(linda.output, group3, 
+                                taxa_table = filt_colon_uni_taxa) +
+            ggtitle("Interaction")
+
+volcano <- ggarrange(volcano_1,volcano_2,volcano_3, ncol=3)
+
+# see the plot
+volcano
+```
+
+###### MaAsLin2
+
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+fit_data = Maaslin2(
+    input_data = filt_colon_uni_data, 
+    input_metadata = filt_colon_uni_metadata, min_abundance = 0,
+    min_prevalence = 0,min_variance = 0,
+    output = file.path(path_maaslin,group1), max_significance = 0.05,
+    fixed_effects = c('Group', 'Country'),random_effects = "Patient",
+    correction = "BH")
+
+```
+
+```{r}
+volcano1 <- volcano_plot_maaslin(fit_data,filt_colon_uni_taxa) + 
+            ggtitle(paste(group[1], "vs", group[2]))
+
+volcano2 <- volcano_plot_maaslin(fit_data,filt_colon_uni_taxa,variable="Country") + 
+            ggtitle("Country effect")
+
+volcano <- ggarrange(volcano1,volcano2, ncol=2)
+volcano
+```
+
+###### Group - Intersection
+
+```{r}
+intersection_results <- group_intersection(group, list_intersections, list_venns,
+                                           linda.output, fit_data,
+                                           raw_linda_results_genus, 
+                                           segment = segment,
+                                           level=level)
+
+list_intersections <- intersection_results[[1]]
+list_venns <- intersection_results[[2]]
+venn <- intersection_results[[3]]
+
+# show the results
+venn
+```
+
+###### Country - Union
+
+```{r,eval=FALSE}
+list_country_union <- country_union(group,linda.output, fit_data,
+                                    segment=segment,
+                                    level=level)
+```
+
+###### Interaction effect
+
+```{r}
+list_interaction_significant <- country_interaction(group,
+                                                    linda.output, 
+                                                    list_intersections,
+                                          filt_colon_uni_data,
+                                          filt_colon_uni_metadata,
+                                          segment=segment,
+                                          level=level)
+
+# see the result
+## significant interaction effect
+list_interaction_significant[[1]]
+
+## results for czech cohort
+list_interaction_significant[[2]]
+
+## results for norwegian cohort
+list_interaction_significant[[3]]
+```
+
+Removing problematic taxa
+
+```{r}
+list_intersections <- removing_interaction_problems(group,
+                                                    list_interaction_significant,
+                                                    list_intersections,
+                                                    segment=segment,
+                                                    level=level)
+```
+
+##### Basic statistics
+
+```{r}
+uni_df <-  merge(basic_univariate_statistics(linda_data,group),
+                 raw_linda_results_genus[[segment]][[group1]],
+                 by="SeqID",all=TRUE)
+
+uni_df[["final_sig"]] <- uni_df$SeqID %in% list_intersections[[paste(segment,level,comparison_name)]][["SeqID"]]
+uni_statistics[[segment]][[paste(level,comparison_name)]] <- uni_df
+
+# for comparison
+new_name <- comparison_name
+addWorksheet(wb, sheetName = new_name)
+writeData(wb, sheet = new_name, uni_df, rowNames=FALSE)
+```
+
+##### Visualization
+
+Heatmap visualizing the linDA's logFoldChange for taxa with p \< 0.1.
+
+```{r, fig.width=10, fig.height=17, fig.fullwidth=TRUE}
+list_heatmap <- list_intersections[grep(paste(segment,level),
+                                  names(list_intersections),value=TRUE)]
+if (length((list_heatmap[[1]][[1]]))>1){
+p_heatmap_linda <- heatmap_linda(list_heatmap,colon_taxa_tab)
+p_heatmap_linda
+}
+```
+
+Dot heatmap
+
+```{r, fig.width=5, fig.height=17, fig.fullwidth=TRUE}
+if (length((list_heatmap[[1]][[1]]))>0){
+dotheatmap_linda <- dot_heatmap_linda(list_heatmap,
+                                      uni_df,
+                                      colon_taxa_tab)
+dotheatmap_linda
+}
+```
+
+**Horizontal bar plot**
+
+```{r}
+if (length((list_heatmap[[1]][[1]]))>0){
+p_prevalence <- horizontal_barplot(wb,taxa=levels(dotheatmap_linda$data$SeqID))
+
+p_prevalence_final <- ggarrange(p_prevalence,
+                                ggplot() + theme_minimal(),
+                                nrow = 2,heights = c(1,0.085))
+p <- ggarrange(dotheatmap_linda + theme(legend.position = "none"),p_prevalence_final,ncol=2,widths = c(1,0.2))
+p
+}
+```
+
+```{r,results='hide',eval=FALSE}
+pdf("../figures/Q3/dotplot_colon.pdf",
+    height =10,width = 4)
+p
+dev.off()
+```
+
+
+#### Saving results
+
+```{r}
+# ALL DATA
+saveWorkbook(wb,file.path(path,paste0("uni_analysis_wb_",segment,".xlsx")),
+             overwrite = TRUE)
+
+# SIGNIFICANT taxa
+
+write.xlsx(list_intersections[grepl(segment,names(list_intersections))] %>%
+            `names<-`(gsub(segment, "", names(
+              list_intersections[grepl(segment,names(list_intersections))]))),
+           file.path(path,paste0("significant_taxa_",segment,".xlsx")))
+```
+
+### Supplementary Analysis
+
+#### ASV level
+
+```{r}
+level="ASV"
+```
+
+```{r}
+path_maaslin="../intermediate_files/maaslin/Q3/ASV/"
+```
+
+```{r}
+raw_linda_results[[segment]] <- list()
+linda_results[[segment]] <- list()
+supplements_wb <- createWorkbook()
+```
+
+##### ibd vs no_ibd
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+**linDA**
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+
+# prepare the data
+linda_data <- binomial_prep(colon_asv_tab,
+                            colon_taxa_tab,
+                            colon_metadata,
+                            group, usage="linDA")
+
+filt_colon_uni_data <- linda_data[[1]]
+filt_colon_uni_taxa <- linda_data[[2]]
+filt_colon_uni_metadata <- linda_data[[3]]
+
+# fit the model
+linda.obj <- linda(filt_colon_uni_data, 
+                   filt_colon_uni_metadata, 
+                   formula = '~ Group * Country + (1|Patient)')
+
+linda.output <- linda.obj$output
+linda.output <- linda_renaming(linda.output, group)
+
+group1 <- paste0(group[1], " vs ","Group",group[2])
+group2 <- paste0(group[1], " , ",group[2], " - CZ vs NO") 
+group3 <- paste0(group[1], " vs ","Group",group[2], ":CountryNO")
+
+for (grp in c(group1,group2,group3)){
+  raw_linda_results[[segment]][[grp]] <- 
+    rawlinda.df(linda.output,
+                grp,
+                filt_colon_uni_data,
+                filt_colon_uni_taxa)
+  
+  linda_results[[segment]][[grp]] <- 
+    linda.df(linda.output,
+             grp,
+             filt_colon_uni_data,
+             filt_colon_uni_taxa)
+}
+
+```
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+# volcano plot
+volcano_1 <- volcano_plot_linda(linda.output, group1,
+                                taxa_table = filt_colon_uni_taxa) +
+              ggtitle(paste(group,collapse=" vs "))
+
+volcano_2  <- volcano_plot_linda(linda.output, group2, 
+                                 taxa_table = filt_colon_uni_taxa) + 
+              ggtitle("Country effect")
+
+volcano_3 <- volcano_plot_linda(linda.output, group3, 
+                                taxa_table = filt_colon_uni_taxa) + 
+              ggtitle("Interaction")
+
+volcano <- ggarrange(volcano_1,volcano_2,volcano_3, ncol=3)
+
+# see the plot
+volcano
+```
+
+**MaAsLin2**
+
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+fit_data = Maaslin2(
+    input_data = filt_colon_uni_data, 
+    input_metadata = filt_colon_uni_metadata, min_abundance = 0,
+    min_prevalence = 0,min_variance = 0,
+    output = file.path(path_maaslin,group1), max_significance = 0.05,
+    fixed_effects = c('Group', 'Country'),random_effects = "Patient",
+    correction = "BH")
+
+```
+
+Volcano plot
+
+```{r}
+volcano1 <- volcano_plot_maaslin(fit_data,filt_colon_uni_taxa) + 
+            ggtitle(paste(group[1], "vs", group[2]))
+
+volcano2 <- volcano_plot_maaslin(fit_data,filt_colon_uni_taxa,variable="Country") +
+            ggtitle("Country effect")
+
+volcano <- ggarrange(volcano1,volcano2, ncol=2)
+
+# see the results
+volcano
+
+```
+
+**Group - Intersection**
+
+```{r}
+intersection_results <- group_intersection(group, list_intersections, list_venns,
+                                           linda.output, fit_data,
+                                           raw_linda_results, 
+                                                                                      segment = segment,
+                                           level=level)
+
+list_intersections <- intersection_results[[1]]
+list_venns <- intersection_results[[2]]
+venn <- intersection_results[[3]]
+
+# show the results
+venn
+```
+
+**Country - Union**
+
+```{r, eval=FALSE}
+list_country_union <- country_union(group,linda.output, fit_data,
+                                    segment=segment,
+                                    level=level)
+```
+
+**Interaction effect**
+
+```{r}
+list_interaction_significant <- country_interaction(group,
+                                                    linda.output, 
+                                                    list_intersections,
+                                                    filt_colon_uni_data,
+                                                    filt_colon_uni_metadata,
+                                                    segment=segment,
+                                          level=level)
+
+# see the result
+## significant interaction effect
+list_interaction_significant[[1]]
+
+## results for czech cohort
+list_interaction_significant[[2]]
+
+## results for norwegian cohort
+list_interaction_significant[[3]]
+```
+
+Removing problematic taxa
+
+```{r}
+list_intersections <- removing_interaction_problems(group,
+                                                    list_interaction_significant,
+                                                    list_intersections,
+                                                    segment=segment,
+                                                    level=level)
+```
+
+Basic statistics
+
+```{r}
+uni_df <-  merge(basic_univariate_statistics(linda_data,group),
+                 raw_linda_results[[segment]][[group1]],
+                 by="SeqID",all=TRUE)
+
+uni_df[["final_sig"]] <- uni_df$SeqID %in% list_intersections[[paste(segment,level,comparison_name)]][["SeqID"]]
+uni_statistics[[segment]][[paste(level,comparison_name)]] <- uni_df
+
+# for comparison
+new_name <- paste(level,comparison_name)
+addWorksheet(supplements_wb, sheetName = new_name)
+writeData(supplements_wb, sheet = new_name, uni_df, rowNames=FALSE)
+```
+
+
+##### Visualization
+
+Heatmap visualizing the linDA's logFoldChange for taxa with p \< 0.1.
+
+```{r, fig.width=10, fig.height=17, fig.fullwidth=TRUE}
+list_heatmap <- list_intersections[grep(paste(segment,level),
+                                  names(list_intersections),value=TRUE)]
+
+if (length((list_heatmap[[1]][[1]]))>1){
+p_heatmap_linda <- heatmap_linda(list_heatmap,colon_taxa_tab)
+p_heatmap_linda
+}
+```
+
+**Dot heatmap**
+
+```{r, fig.width=5, fig.height=25, fig.fullwidth=TRUE}
+if (length((list_heatmap[[1]][[1]]))>0){
+dotheatmap_linda <- dot_heatmap_linda(list_heatmap,uni_df,colon_taxa_tab)
+dotheatmap_linda
+}
+```
+
+
+#### Phylum level
+
+```{r}
+level="phylum"
+```
+
+```{r}
+path_maaslin="../intermediate_files/maaslin/Q3/Phylum/"
+```
+
+```{r}
+raw_linda_results_phylum[[segment]] <- list()
+linda_results_phylum[[segment]] <- list()
+```
+
+Aggregate taxa
+
+```{r}
+phylum_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = "Phylum")
+
+colon_phylum_tab <- phylum_data[[1]]
+colon_phylum_taxa_tab <- phylum_data[[2]]
+
+```
+
+##### ibd vs no_ibd
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+**linDA**
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+
+# prepare the data
+linda_data <- binomial_prep(colon_phylum_tab,
+                            colon_phylum_taxa_tab,
+                            colon_metadata,
+                            group, usage="linDA")
+
+filt_colon_uni_data <- linda_data[[1]]
+filt_colon_uni_taxa <- linda_data[[2]]
+filt_colon_uni_metadata <- linda_data[[3]]
+
+# fit the model
+linda.obj <- linda(filt_colon_uni_data, 
+                   filt_colon_uni_metadata, 
+                   formula = '~ Group * Country + (1|Patient)')
+
+linda.output <- linda.obj$output
+linda.output <- linda_renaming(linda.output, group)
+
+group1 <- paste0(group[1], " vs ","Group",group[2])
+group2 <- paste0(group[1], " , ",group[2], " - CZ vs NO") 
+group3 <- paste0(group[1], " vs ","Group",group[2], ":CountryNO")
+
+for (grp in c(group1,group2,group3)){
+  raw_linda_results[[segment]][[grp]] <- 
+    rawlinda.df(linda.output,
+                grp,
+                filt_colon_uni_data,
+                filt_colon_uni_taxa)
+  
+  linda_results[[segment]][[grp]] <- 
+    linda.df(linda.output,
+             grp,
+             filt_colon_uni_data,
+             filt_colon_uni_taxa)
+}
+
+```
+
+```{r, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+# volcano plot
+volcano_1 <- volcano_plot_linda(linda.output, group1,
+                                taxa_table = filt_colon_uni_taxa) +
+              ggtitle(paste(group,collapse=" vs "))
+
+volcano_2  <- volcano_plot_linda(linda.output, group2, 
+                                 taxa_table = filt_colon_uni_taxa) + 
+              ggtitle("Country effect")
+
+volcano_3 <- volcano_plot_linda(linda.output, group3, 
+                                taxa_table = filt_colon_uni_taxa) + 
+              ggtitle("Interaction")
+
+volcano <- ggarrange(volcano_1,volcano_2,volcano_3, ncol=3)
+
+# see the plot
+volcano
+```
+
+**MaAsLin2**
+
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+fit_data = Maaslin2(
+    input_data = filt_colon_uni_data, 
+    input_metadata = filt_colon_uni_metadata, min_abundance = 0,
+    min_prevalence = 0,min_variance = 0,
+    output = file.path(path_maaslin,group1), max_significance = 0.05,
+    fixed_effects = c('Group', 'Country'),random_effects = "Patient",
+    correction = "BH")
+
+```
+
+Volcano plot
+
+```{r}
+volcano1 <- volcano_plot_maaslin(fit_data,filt_colon_uni_taxa) + 
+            ggtitle(paste(group[1], "vs", group[2]))
+
+volcano2 <- volcano_plot_maaslin(fit_data,filt_colon_uni_taxa,variable="Country") +
+            ggtitle("Country effect")
+
+volcano <- ggarrange(volcano1,volcano2, ncol=2)
+
+# see the results
+volcano
+
+```
+
+**Group - Intersection**
+
+```{r}
+intersection_results <- group_intersection(group, list_intersections, list_venns,
+                                           linda.output, fit_data,
+                                           raw_linda_results, 
+                                                                                      segment = segment,
+                                           level=level)
+
+list_intersections <- intersection_results[[1]]
+list_venns <- intersection_results[[2]]
+venn <- intersection_results[[3]]
+
+# show the results
+venn
+```
+
+**Country - Union**
+
+```{r, eval=FALSE}
+list_country_union <- country_union(group,linda.output, fit_data,
+                                    segment=segment,
+                                    level=level)
+```
+
+**Interaction effect**
+
+```{r}
+list_interaction_significant <- country_interaction(group,
+                                                    linda.output, 
+                                                    list_intersections,
+                                                    filt_colon_uni_data,
+                                                    filt_colon_uni_metadata,
+                                                    segment=segment,
+                                          level=level)
+
+# see the result
+## significant interaction effect
+list_interaction_significant[[1]]
+
+## results for czech cohort
+list_interaction_significant[[2]]
+
+## results for norwegian cohort
+list_interaction_significant[[3]]
+```
+
+Removing problematic taxa
+
+```{r}
+list_intersections <- removing_interaction_problems(group,
+                                                    list_interaction_significant,
+                                                    list_intersections,
+                                                    segment=segment,
+                                                    level=level)
+```
+
+Basic statistics
+
+```{r}
+uni_df <-  merge(basic_univariate_statistics(linda_data,group),
+                 raw_linda_results[[segment]][[group1]],
+                 by="SeqID",all=TRUE)
+
+uni_df[["final_sig"]] <- uni_df$SeqID %in% list_intersections[[paste(segment,level,comparison_name)]][["SeqID"]]
+uni_statistics[[segment]][[paste(level,comparison_name)]] <- uni_df
+
+# for comparison
+new_name <- paste(level,comparison_name)
+addWorksheet(supplements_wb, sheetName = new_name)
+writeData(supplements_wb, sheet = new_name, uni_df, rowNames=FALSE)
+```
+
+##### Visualization
+
+Heatmap visualizing the linDA's logFoldChange for taxa with p \< 0.1.
+
+```{r, fig.width=10, fig.height=17, fig.fullwidth=TRUE}
+list_heatmap <- list_intersections[grep(paste(segment,level),
+                                  names(list_intersections),value=TRUE)]
+
+if (length((list_heatmap[[1]][[1]]))>1){
+p_heatmap_linda <- heatmap_linda(list_heatmap,colon_taxa_tab)
+p_heatmap_linda
+}
+```
+
+**Dot heatmap**
+
+```{r, fig.width=5, fig.height=25, fig.fullwidth=TRUE}
+if (length((list_heatmap[[1]][[1]]))>0){
+dotheatmap_linda <- dot_heatmap_linda(list_heatmap,uni_df,colon_taxa_tab)
+dotheatmap_linda
+}
+```
+
+
+#### Saving results
+
+```{r}
+# ALL DATA
+saveWorkbook(supplements_wb,file.path(path,paste0("supplements_uni_analysis_wb_",segment,".xlsx")),overwrite = TRUE)
+
+# SIGNIFICANT taxa
+write.xlsx(list_intersections[grepl(segment,names(list_intersections))] %>%
+            `names<-`(gsub(segment, "", names(
+              list_intersections[grepl(segment,names(list_intersections))]))),
+           file.path(path,paste0("supplements_significant_taxa_",segment,".xlsx")))
+```
+
+
+## Machine learning
+
+```{r}
+path = "../results/Q3/models"
+```
+
+### ElasticNet
+
+```{r}
+model="enet"
+```
+
+#### ASV level
+
+```{r}
+level="ASV"
+```
+
+##### ibd vs no_ibd
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_asv_tab,
+                                     colon_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+enet_model <- glmnet_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+roc_c
+```
+
+
+
+#### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+##### ibd vs no_ibd
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+enet_model <- glmnet_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+
+roc_c
+```
+
+
+#### Saving results
+
+```{r}
+models_summ_df_colon <- do.call(rbind, 
+  models_summ[grep(segment,names(models_summ),value = TRUE)])
+
+write.csv(models_summ_df_colon,file.path(path,paste0("elastic_net_",segment,".csv")))
+```
+
+### Supplementary models
+
+#### CLR-transformed data
+
+##### kNN
+
+```{r}
+model="knn"
+```
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_asv_tab,
+                                     colon_taxa_tab,
+                                     colon_metadata,
+                                     group, usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+knn_model <- knn_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+knn_model <- knn_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+
+##### Random Forest
+
+```{r}
+model="rf"
+```
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_asv_tab,
+                                     colon_taxa_tab,
+                                     colon_metadata,
+                                     group, usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+rf_model <- rf_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                        clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+rf_model <- rf_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                        clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+
+##### Gradient boosting
+
+```{r}
+model="gb"
+```
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_asv_tab,
+                                     colon_taxa_tab,
+                                     colon_metadata,
+                                     group, usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+gbm_model <- gbm_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+gbm_model <- gbm_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+
+#### Relative abundances
+
+##### Elastic net
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_asv_tab,
+                                     colon_taxa_tab,
+                                     colon_metadata,
+                                     group, usage="ml_ra",
+                                     patient = TRUE)
+
+# fit the model
+enet_model <- glmnet_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["enet_model_ra"]][[model_name]] <- enet_model$model_summary
+
+supplements_models[["roc_cs"]][["enet_model_ra"]][[model_name]] <- enet_model$kfold_rocobjs
+
+# see the results
+enet_model$model_summary %>% t()
+roc_c
+```
+
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_ra",
+                                     patient = TRUE)
+
+# fit the model
+enet_model <- glmnet_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                              clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["enet_model_ra"]][[model_name]] <- enet_model$model_summary
+
+supplements_models[["roc_cs"]][["enet_model_ra"]][[model_name]] <- enet_model$kfold_rocobjs
+
+# see the results
+enet_model$model_summary %>% t()
+roc_c
+```
+
+
+##### kNN
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_asv_tab,
+                                     colon_taxa_tab,
+                                     colon_metadata,
+                                     group, usage="ml_ra",
+                                     patient = TRUE)
+
+# fit the model
+knn_model <- knn_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model_ra"]][[model_name]] <- knn_model$model_summary
+
+supplements_models[["roc_cs"]][["knn_model_ra"]][[model_name]] <- knn_model$kfold_rocobjs
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_ra",
+                                     patient = TRUE)
+
+# fit the model
+knn_model <- knn_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model_ra"]][[model_name]] <- knn_model$model_summary
+
+supplements_models[["roc_cs"]][["knn_model_ra"]][[model_name]] <- knn_model$kfold_rocobjs
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+
+##### Random Forest
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_asv_tab,
+                                     colon_taxa_tab,
+                                     colon_metadata,
+                                     group, usage="ml_ra",
+                                     patient = TRUE)
+
+# fit the model
+rf_model <- rf_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                        clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model_ra"]][[model_name]] <- rf_model$model_summary
+
+supplements_models[["roc_cs"]][["rf_model_ra"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_ra",
+                                     patient = TRUE)
+
+# fit the model
+rf_model <- rf_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                        clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model_ra"]][[model_name]] <- rf_model$model_summary
+
+supplements_models[["roc_cs"]][["rf_model_ra"]][[model_name]] <- rf_model$kfold_rocobjs
+
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+##### Gradient boosting
+
+###### ASV level
+
+```{r}
+level="ASV"
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_asv_tab,
+                                     colon_taxa_tab,
+                                     colon_metadata,
+                                     group, usage="ml_ra",
+                                     patient = TRUE)
+
+# fit the model
+gbm_model <- gbm_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model_ra"]][[model_name]] <- gbm_model$model_summary
+
+supplements_models[["roc_cs"]][["gbm_model_ra"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+###### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**ibd vs no_ibd**
+
+```{r}
+group <- c("no_ibd","ibd")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_ra",
+                                     patient = TRUE)
+
+# fit the model
+gbm_model <- gbm_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=10,
+                          clust_var="Patient",
+                             reuse=TRUE,
+                              file=model_name,
+                              Q="Q3")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model_ra"]][[model_name]] <- gbm_model$model_summary
+
+supplements_models[["roc_cs"]][["gbm_model_ra"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+#### Saving results
+
+```{r}
+models_list <- list()
+
+for (model_name in names(supplements_models$models_summ)){
+  df <- do.call(rbind, supplements_models$models_summ[[model_name]])
+  models_list[[model_name]] <- df
+}
+
+write.xlsx(models_list,
+           file=file.path(path,paste0("supplements_models_",segment,".xlsx")),
+           rowNames=TRUE)
+
+```
+
+## Results overview
+
+#### Alpha diversity
+
+```{r}
+pc_observed[[segment]]
+pc_shannon[[segment]]
+pc_simpson[[segment]]
+pc_pielou[[segment]]
+```
+
+Plots
+
+```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE}
+alpha_div_plots[[paste(segment,"Country")]]
+```
+
+```{r, fig.width=7, fig.height=4, fig.fullwidth=TRUE}
+alpha_div_plots[[paste(segment,"Custom")]]
+```
+
+#### Beta diversity
+
+**Main results**
+
+```{r}
+pairwise_aitchison_raw[[paste("genus", segment)]]
+```
+
+PCA
+
+```{r, fig.width=5, fig.height=3, fig.fullwidth=TRUE, eval=TRUE}
+pca_plots_list[[paste(segment,"genus custom")]]
+```
+
+**Supplements**
+
+```{r}
+knitr::kable(supplements_beta[!grepl("PCoA",names(supplements_beta))],
+             digits = 3,
+             caption = "Supplementary PERMANOVA results")
+```
+
+PCA
+
+```{r, fig.width=8, fig.height=7, fig.fullwidth=TRUE, eval=TRUE}
+plot_list <- supplements_beta[grepl("PCoA",names(supplements_beta)) &
+                              grepl(segment,names(supplements_beta))]
+
+ggarrange(plotlist = plot_list,
+          labels=names(plot_list),
+          font.label = list(size=5,face="plain"),
+          ncol=2,nrow=3)
+```
+
+#### Univariate analysis
+
+**Number of significant taxa**
+
+```{r}
+knitr::kable(as.data.frame(lapply(list_intersections,nrow)) %>% t() %>% 
+  `colnames<-`("Count") %>% 
+  `rownames<-`(c(names(list_intersections))),caption="Number of significant taxa")
+```
+
+**Counts**
+
+```{r, eval=FALSE}
+# univar_list <- univariate_statistics(list_intersections,
+#                                      psc_effect,
+#                                      ileum_genus_asv_taxa_tab)
+# 
+# univar_df <- univar_list[[1]]
+# wb <- univar_list[[2]]
+# 
+# # save the results
+# saveWorkbook(wb,"results/Q3/DAA_final_terminal_ileum.xlsx", overwrite = TRUE)
+# 
+# # see the results
+# univar_df
+```
+
+#### Machine learning
+
+**Main models**
+
+Summary
+
+```{r}
+knitr::kable(models_summ_df_colon %>% dplyr::select(
+"alpha","lambda",
+"auc_optimism_corrected",
+"auc_optimism_corrected_CIL",
+"auc_optimism_corrected_CIU"),
+             digits=3,caption="Elastic net results")
+```
+
+**ROC - ASV level**
+
+```{r}
+roc_curve_all_custom(roc_cs[3], 
+                     Q="Q3",
+                     model_name="enet_model")
+```
+
+**ROC - Genus level**
+
+```{r}
+roc_curve_all_custom(roc_cs[4],Q="Q3",
+                     model_name="enet_model")
+```
+
+**Supplementary models**
+
+Summary
+
+```{r}
+# Build final dataframe
+models_list[["enet_model"]] <- rbind(models_summ_df_ileum,models_summ_df_colon)
+final_df <- tibble(row_names = rownames(models_list[[1]]))
+
+# Loop through models and extract required values
+for (model_name in names(models_list)) {
+  model_df <- models_list[[model_name]]
+  
+  # Combine AUC_optimism_corrected with its CI values
+  final_df[[model_name]] <- paste0(
+    round(model_df$auc_optimism_corrected, 3), 
+    " (", round(model_df$auc_optimism_corrected_CIL, 3), "; ", 
+    round(model_df$auc_optimism_corrected_CIU, 3), ")"
+  )
+}
+
+knitr::kable(final_df, caption="All models")
+write.csv(final_df,file=file.path(path,"AUC_all_models.csv"),row.names = FALSE)
+```
+
+ROC - ASV
+
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+rocs_list <- supplements_models$roc_cs
+rocs_list[["enet_model"]] <- roc_cs
+
+plot_list <- list()
+
+for (model_name in names(rocs_list)) {
+  plot_list[[model_name]] <- roc_curve_all_custom(rocs_list[[model_name]][3],
+                       Q="Q3",
+                       model_name=model_name)
+}
+
+ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=7))
+```
+
+ROC - genus
+
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+plot_list <- list()
+
+for (model_name in names(rocs_list)) {
+  plot_list[[model_name]] <- roc_curve_all_custom(rocs_list[[model_name]][4],
+                       Q="Q3",
+                       model_name=model_name)
+}
+
+p <- ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=7))
+```
+
+```{r,results='hide'}
+pdf("../figures/Q3/models_colon.pdf",
+    height =10,width = 10)
+p
+dev.off()
+```
+
+<!-- # Paper-ready visualizations -->
+
+<!-- ## Alpha diversity -->
+
+<!-- **Alpha diversity** -->
+
+<!-- ```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE} -->
+<!-- p_A <- alpha_div_plots$`Ileum Custom` +  -->
+<!--   ggtitle("Terminal ileum")+  -->
+<!--   theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15)) -->
+
+<!-- p_B <-  alpha_div_plots$`Colon Custom` +  -->
+<!--   ggtitle("Colon") +  -->
+<!--   theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15)) -->
+
+<!-- Q3_alpha <- ggarrange(p_A,ggplot() + theme_minimal(),p_B,nrow=1, ncol=3, -->
+<!--                       widths = c(1,0.1,1)) -->
+<!-- Q3_alpha -->
+<!-- ``` -->
+
+<!-- ## Beta diversity -->
+
+<!-- ASV level -->
+
+<!-- ```{r} -->
+
+<!-- ``` -->
+
+<!-- Genus level -->
+
+<!-- ```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE} -->
+<!-- pca_ti <- pca_plots_list$`Q3 Ileum Genus custom` + theme(legend.position = "none") -->
+<!-- pca_colon <- pca_plots_list$`Q3 Colon Genus custom` + theme(legend.position = "none") -->
+
+<!-- genus_Q3_beta <- ggarrange(pca_ti, -->
+<!--                            ggplot() + theme_minimal(), -->
+<!--                            pca_colon,ncol=3, -->
+<!--                            widths = c(1,0.1,1)) -->
+<!-- genus_Q3_beta -->
+<!-- ``` -->
+
+<!-- **Alpha + Beta diversity** -->
+
+<!-- ```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE} -->
+<!-- alpha_beta <- ggarrange(Q3_alpha,genus_Q3_beta, -->
+<!--                         ncol = 1,nrow=2,labels = c("A","B")) -->
+<!-- alpha_beta -->
+<!-- ``` -->
+
+<!-- ## Elastic net -->
+
+<!-- ASV level -->
+
+<!-- ```{r} -->
+
+<!-- ``` -->
+
+<!-- Genus level -->
+
+<!-- ```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE} -->
+<!-- roc_cs_ti <- roc_cs[4:6] -->
+<!-- roc_cs_colon <- roc_cs[10:12] -->
+
+<!-- roc_curve_ti <- roc_curve_all_custom(roc_cs_ti, Q = "Q3",legend = FALSE) -->
+
+<!-- roc_curve_colon <- roc_curve_all_custom(roc_cs_colon, Q="Q3",legend=FALSE)  -->
+
+<!-- roc_curve_plot <- ggarrange(ggplot() + theme_minimal(), -->
+<!--                             roc_curve_ti, -->
+<!--                             ggplot() + theme_minimal(), -->
+<!--                             roc_curve_colon, -->
+<!--                             ggplot() + theme_minimal(), -->
+<!--                             ncol=5, widths = c(0.1,1,0.2,1,0.1), -->
+<!--                             labels=c("","A","","B","")) -->
+
+<!-- roc_curve_plot <- ggarrange(roc_curve_ti, -->
+<!--                             ggplot() + theme_minimal(), -->
+<!--                             roc_curve_colon, -->
+<!--                             ggplot() + theme_minimal(), -->
+<!--                             ncol=4, widths = c(1,0.1,1,0.1)) -->
+<!-- roc_curve_plot -->
+
+<!-- ``` -->
+
+<!-- ```{r, fig.width=10, fig.height=12, fig.fullwidth=TRUE} -->
+<!-- alpha_beta_elastic <- ggarrange(Q3_alpha,genus_Q3_beta,roc_curve_plot, -->
+<!--                         ncol = 1,nrow=3,labels = LETTERS,heights = c(1,1,1)) -->
+<!-- alpha_beta_elastic -->
+<!-- ``` -->
+
+<!-- ## Dot heatmap - DAA -->
+
+<!-- ASV level -->
+
+<!-- ```{r} -->
+
+<!-- ``` -->
+
+<!-- Genus level -->
+
+<!-- ```{r, fig.width=10, fig.height=13, fig.fullwidth=TRUE} -->
+<!-- list_for_heatmap_ileum <- c(list_intersections[c(4,5,6)]) -->
+<!-- list_for_heatmap_colon <- c(list_intersections[c(10,11,12)]) -->
+
+<!-- names(list_for_heatmap_colon) <- gsub("Genus","",gsub("colon","",names(list_for_heatmap_colon))) -->
+<!-- names(list_for_heatmap_ileum) <- gsub("Genus","",gsub("Ileum","",names(list_for_heatmap_ileum))) -->
+
+<!-- p_ileum <- dot_heatmap_linda(list_for_heatmap_ileum, -->
+<!--                              ileum_taxa_tab) + xlab("") + ylab("") +  -->
+<!--   ggtitle("Terminal ileum") +  -->
+<!--   theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15), -->
+<!--         legend.position = "none") -->
+
+
+<!-- p_colon <- dot_heatmap_linda(list_for_heatmap_colon, -->
+<!--                              colon_taxa_tab) + xlab("") + ylab("") + -->
+<!--   ggtitle("Colon") +  -->
+<!--   theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15), -->
+<!--         legend.position = "none") -->
+
+<!-- heatmap_plot <- ggarrange(p_ileum, -->
+<!--                           p_colon, -->
+<!--                           ncol = 2)  -->
+<!-- heatmap_plot -->
+<!-- ``` -->
+
+<!-- ## All together -->
+
+<!-- ```{r, fig.width=18, fig.height=10, fig.fullwidth=TRUE} -->
+
+<!-- Q3_plot <- ggarrange(alpha_beta_elastic, -->
+<!--                      ggplot()+ theme_minimal(), -->
+<!--                      heatmap_plot, -->
+<!--                       ggplot()+ theme_minimal(), -->
+<!--                      ncol=4,labels=c("","", "D",""),widths = c(1,0.2,0.8,0.15)) -->
+<!-- Q3_plot -->
+<!-- ``` -->
+
+<!-- ```{r, eval=FALSE} -->
+<!-- pdf("clanok/obrazky/Q3/Q3_plot_newalpha.pdf",height = 10,width = 17) -->
+<!-- Q3_plot -->
+<!-- dev.off() -->
+<!-- ``` -->
+
+<!-- # Session info -->
+
+<!-- ```{r} -->
+<!-- sessionInfo() -->
+<!-- ``` -->

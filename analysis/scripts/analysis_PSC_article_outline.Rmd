@@ -267,18 +267,20 @@ write.csv(alpha_data,file.path(path,paste0("alpha_indices_",segment,".csv")),
 ### Country plot
 
 ```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE}
-labels = data.frame(country=rep(c("CZ","NO"),3),
-                   x=c(0.8,1.19,1.8,2.19,2.8,3.19),
-                   y=rep(0.2,6),
-                   label=rep(c("CZ","NO"),3))
-
-p_boxplot_alpha <- boxplot_subgroups(alpha_data,labels)
+p_boxplot_alpha <- alpha_diversity_countries(alpha_data)
 
 # save the results
 alpha_div_plots[[paste(segment,"Country")]] <- p_boxplot_alpha
 
 # see the results
 p_boxplot_alpha
+```
+
+```{r,results='hide'}
+pdf("../figures/Q1/alpha_diversity_terminal_ileum.pdf",
+    height =4,width = 7)
+p_boxplot_alpha
+dev.off()
 ```
 
 ### Custom plot
@@ -427,6 +429,7 @@ caption = "Raw results of linear model of Pielou estimation.")
 knitr::kable(results_model_pielou_emeans,digits = 3,
 caption = "Raw results of independent country analysis")
 ```
+
 ### Saving results
 
 ```{r}
@@ -439,6 +442,7 @@ alpha_list <- list(
 write.xlsx(alpha_list, 
            file = file.path(path,paste0("alpha_diversity_results_",segment,".xlsx")))
 ```
+
 
 ## Beta diversity
 
@@ -516,7 +520,7 @@ knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Count
 Interaction check
 
 ```{r}
-interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.1]
 
 for (i in 1:length(interaction_sig)){
   group1 <- unlist(strsplit(interaction_sig[i],split = " vs "))[1]
@@ -542,13 +546,20 @@ p <- pca_plot_custom(filt_ileum_genus_tab,
                                  filt_ileum_genus_taxa,
                                  filt_ileum_metadata,
                                  show_boxplots = TRUE,
-                                 variable = "Group", size=3, show_legend=TRUE)
+                                 variable = "Group", size=3, show_legend= FALSE)
 
 # save the results
 pca_plots_list[[paste(segment,level,"custom")]] <- p
 
 # see the results
 p
+```
+
+```{r,results='hide'}
+pdf("../figures/Q1/beta_diversity_terminal_ileum.pdf",
+    height =5,width = 5)
+p
+dev.off()
 ```
 
 #### Saving results
@@ -632,7 +643,7 @@ p <- pca_plot_custom(filt_ileum_genus_tab,
                                  filt_ileum_metadata,
                                  measure = "bray",
                                  show_boxplots = TRUE,
-                                 variable = "Group", size=3, show_legend=TRUE)
+                                 variable = "Group", size=3, show_legend= FALSE)
 
 # save the results
 supplements_beta[[paste("PCoA bray",level,segment)]] <- p
@@ -706,7 +717,7 @@ p <- pca_plot_custom(filt_ileum_genus_tab,
                                  filt_ileum_metadata,
                                  measure = "jaccard",
                                  show_boxplots = TRUE,
-                                 variable = "Group", size=3, show_legend=TRUE)
+                                 variable = "Group", size=3, show_legend= FALSE)
 
 # save the results
 supplements_beta[[paste("PCoA jaccard",level,segment)]] <- p
@@ -782,7 +793,7 @@ p <- pca_plot_custom(filt_ileum_asv_tab,
                            filt_ileum_taxa_tab,
                            filt_ileum_metadata,
                            show_boxplots = TRUE,
-                           variable = "Group", size=3, show_legend=TRUE)
+                           variable = "Group", size=3, show_legend= FALSE)
 
 # save the results
 supplements_beta[[paste("PCoA aitchison",level,segment)]] <- p
@@ -855,7 +866,7 @@ p <- pca_plot_custom(filt_ileum_asv_tab,
                      filt_ileum_metadata,
                      measure = "bray",
                      show_boxplots = TRUE,
-                     variable = "Group", size=3, show_legend=TRUE)
+                     variable = "Group", size=3, show_legend= FALSE)
 
 # save the results
 supplements_beta[[paste("PCoA bray",level,segment)]] <- p
@@ -927,7 +938,7 @@ p <- pca_plot_custom(filt_ileum_asv_tab,
                      filt_ileum_metadata,
                      measure = "jaccard",
                      show_boxplots = TRUE,
-                     variable = "Group", size=3, show_legend=TRUE)
+                     variable = "Group", size=3, show_legend= FALSE)
 
 # save the results
 supplements_beta[[paste("PCoA jaccard",level,segment)]] <- p
@@ -1517,9 +1528,32 @@ Dot heatmap
 
 ```{r, fig.width=5, fig.height=17, fig.fullwidth=TRUE}
 dotheatmap_linda <- dot_heatmap_linda(list_heatmap,
-                                      uni_df,
-                                      ileum_taxa_tab)
+                                      uni_statistics$terminal_ileum[grepl(level,names(uni_statistics$terminal_ileum))],
+                                      ileum_taxa_tab) + xlab("") + ylab("")
 dotheatmap_linda
+```
+**Horizontal bar plot**
+
+```{r}
+p_prevalence <- horizontal_barplot(wb,taxa=levels(dotheatmap_linda$data$SeqID))
+```
+
+
+```{r}
+p_prevalence_final <- ggarrange(p_prevalence,
+                                ggplot() + theme_minimal(),
+                                nrow = 2,heights = c(1,0.09))
+p <- ggarrange(dotheatmap_linda + theme(legend.position = "none"),p_prevalence_final,ncol=2,widths = c(1,0.3))
+p
+
+dot_heatmap_ileum <- p
+```
+
+```{r,results='hide'}
+pdf("../figures/Q1/dotplot_terminal_ileum.pdf",
+    height =10,width = 4)
+p
+dev.off()
 ```
 
 #### PSC effect
@@ -2106,7 +2140,7 @@ Dot heatmap
 
 ```{r, fig.width=5, fig.height=17, fig.fullwidth=TRUE}
 dotheatmap_linda <- dot_heatmap_linda(list_heatmap,
-                                      uni_df,
+                                      uni_statistics$terminal_ileum[grepl(level,names(uni_statistics$terminal_ileum))],
                                       ileum_taxa_tab)
 dotheatmap_linda
 ```
@@ -2683,7 +2717,7 @@ Dot heatmap
 
 ```{r, fig.width=5, fig.height=17, fig.fullwidth=TRUE}
 dotheatmap_linda <- dot_heatmap_linda(list_heatmap,
-                                      uni_df,
+                                      uni_statistics$terminal_ileum[grepl(level,names(uni_statistics$terminal_ileum))],
                                       ileum_taxa_tab)
 dotheatmap_linda
 ```
@@ -3712,7 +3746,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                             reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -3803,7 +3837,6 @@ supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_r
 gbm_model$model_summary %>% t()
 roc_c
 ```
-
 
 #### Relative abundances
 
@@ -4993,7 +5026,6 @@ ROC - ASV
 ```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
 rocs_list <- supplements_models$roc_cs
 rocs_list[["enet_model"]] <- roc_cs
-
 plot_list <- list()
 
 for (model_name in names(rocs_list)) {
@@ -5003,6 +5035,8 @@ for (model_name in names(rocs_list)) {
 }
 
 ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=7))
+
+rocs_list_ileum <- rocs_list
 ```
 
 ROC - genus
@@ -5016,7 +5050,14 @@ for (model_name in names(rocs_list)) {
                        model_name=model_name)
 }
 
-ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=7))
+p <- ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=5))
+```
+
+```{r,results='hide'}
+pdf("../figures/Q1/models_terminal_ileum.pdf",
+    height =10,width = 10)
+p
+dev.off()
 ```
 
 # Analysis - Colon
@@ -5174,20 +5215,20 @@ write.csv(alpha_data,file.path(path,paste0("alpha_indices_",segment,".csv")),
 ### Country plot
 
 ```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE}
-# preparing data frame
-
-labels = data.frame(country=rep(c("CZ","NO"),3),
-                   x=c(0.8,1.19,1.8,2.19,2.8,3.19),
-                   y=rep(0.2,6),
-                   label=rep(c("CZ","NO"),3))
-
-p_boxplot_alpha <- boxplot_subgroups(alpha_data,labels)
+p_boxplot_alpha <- alpha_diversity_countries(alpha_data)
 
 # save the results
 alpha_div_plots[[paste(segment,"Country")]] <- p_boxplot_alpha
 
 # see the results
 p_boxplot_alpha
+```
+
+```{r,results='hide'}
+pdf("../figures/Q1/alpha_diversity_colon.pdf",
+    height =4,width = 7)
+p_boxplot_alpha
+dev.off()
 ```
 
 ### Custom plot
@@ -5350,6 +5391,7 @@ write.xlsx(alpha_list,
            file = file.path(path,paste0("alpha_diversity_results_",segment,".xlsx")))
 ```
 
+
 ## Beta diversity
 
 Calculating Aitchison distance (euclidean distance on clr-transformed
@@ -5426,7 +5468,7 @@ knitr::kable(pp_fac.cov,digits = 3,caption = "PERMANOVA, INTERACTION GROUP:Count
 Interaction check
 
 ```{r}
-interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.05]
+interaction_sig <- pp_fac.cov$pairs[pp_fac.cov$p.adjusted < 0.1]
 
 if (length(interaction_sig)>0){
  for (i in 1:length(interaction_sig)){
@@ -5456,7 +5498,7 @@ p <- pca_plot_custom(filt_colon_genus_tab,
                                  filt_colon_genus_metadata,
                                  show_boxplots = TRUE,
                                  variable = "Group", size=2, 
-                                 show_legend=TRUE)
+                                 show_legend= FALSE)
 
 # save the results
 pca_plots_list[[paste(segment,level,"custom")]] <- p
@@ -5464,6 +5506,13 @@ pca_plots_list[[paste(segment,level,"custom")]] <- p
 # see the results
 p
 
+```
+
+```{r,results='hide'}
+pdf("../figures/Q1/beta_diversity_colon.pdf",
+    height =5,width = 5)
+p
+dev.off()
 ```
 
 #### Saving results
@@ -5552,7 +5601,7 @@ p <- pca_plot_custom(filt_colon_genus_tab,
                                  filt_colon_genus_metadata,
                                  measure = "bray",
                                  show_boxplots = TRUE,
-                                 variable = "Group", size=3, show_legend=TRUE)
+                                 variable = "Group", size=3, show_legend= FALSE)
 
 # save the results
 supplements_beta[[paste("PCoA bray",level,segment)]] <- p
@@ -5635,7 +5684,7 @@ p <- pca_plot_custom(filt_colon_genus_tab,
                                  filt_colon_genus_metadata,
                                  measure = "jaccard",
                                  show_boxplots = TRUE,
-                                 variable = "Group", size=3, show_legend=TRUE)
+                                 variable = "Group", size=3, show_legend= FALSE)
 
 # save the results
 supplements_beta[[paste("PCoA jaccard",level,segment)]] <- p
@@ -5729,7 +5778,7 @@ p <- pca_plot_custom(filt_colon_asv_tab,
                            show_boxplots = TRUE,
                            variable = "Group", 
                            size=3, 
-                           show_legend=TRUE)
+                           show_legend= FALSE)
 
 # save the results
 supplements_beta[[paste("PCoA aitchison",level,segment)]] <- p
@@ -5811,7 +5860,7 @@ p <- pca_plot_custom(filt_colon_asv_tab,
                      filt_colon_metadata,
                      measure = "bray",
                      show_boxplots = TRUE,
-                     variable = "Group", size=3, show_legend=TRUE)
+                     variable = "Group", size=3, show_legend= FALSE)
 
 # save the results
 supplements_beta[[paste("PCoA bray",level,segment)]] <- p
@@ -5892,7 +5941,7 @@ p <- pca_plot_custom(filt_colon_asv_tab,
                      filt_colon_metadata,
                      measure = "jaccard",
                      show_boxplots = TRUE,
-                     variable = "Group", size=3, show_legend=TRUE)
+                     variable = "Group", size=3, show_legend= FALSE)
 
 # save the results
 supplements_beta[[paste("PCoA jaccard",level,segment)]] <- p
@@ -6481,9 +6530,32 @@ Dot heatmap
 
 ```{r, fig.width=5, fig.height=17, fig.fullwidth=TRUE}
 dotheatmap_linda <- dot_heatmap_linda(list_heatmap,
-                                      uni_df,
-                                      colon_taxa_tab)
+                                      uni_statistics$colon[grepl(level,names(uni_statistics$colon))],
+                                      colon_taxa_tab) + xlab("") + ylab("")
 dotheatmap_linda
+```
+
+**Horizontal bar plot**
+
+```{r}
+p_prevalence <- horizontal_barplot(wb,taxa=levels(dotheatmap_linda$data$SeqID))
+```
+
+
+```{r}
+p_prevalence_final <- ggarrange(p_prevalence,
+                                ggplot() + theme_minimal(),
+                                nrow = 2,heights = c(1,0.09))
+p <- ggarrange(dotheatmap_linda + theme(legend.position = "none"),p_prevalence_final,ncol=2,widths = c(1,0.3))
+
+dot_heatmap_colon <- p
+```
+
+```{r,results='hide'}
+pdf("../figures/Q1/dotplot_colon.pdf",
+    height =10,width = 4)
+p
+dev.off()
 ```
 
 ##### PSC effect
@@ -7056,7 +7128,7 @@ p_heatmap_linda
 **Dot heatmap**
 
 ```{r, fig.width=5, fig.height=25, fig.fullwidth=TRUE}
-dotheatmap_linda <- dot_heatmap_linda(list_heatmap,uni_df,colon_taxa_tab)
+dotheatmap_linda <- dot_heatmap_linda(list_heatmap,uni_statistics$colon[grepl(level,names(uni_statistics$colon))],colon_taxa_tab)
 dotheatmap_linda
 ```
 
@@ -7623,7 +7695,7 @@ p_heatmap_linda
 **Dot heatmap**
 
 ```{r, fig.width=5, fig.height=25, fig.fullwidth=TRUE}
-dotheatmap_linda <- dot_heatmap_linda(list_heatmap,uni_df,colon_taxa_tab)
+dotheatmap_linda <- dot_heatmap_linda(list_heatmap,uni_statistics$colon[grepl(level,names(uni_statistics$colon))],colon_taxa_tab)
 dotheatmap_linda
 ```
 
@@ -8586,7 +8658,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                             reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9763,7 +9835,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                             reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9845,7 +9917,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                             reuse=TRUE,
                               file=model_name,
                               Q="Q1")
 
@@ -9877,6 +9949,7 @@ write.xlsx(models_list,
            rowNames=TRUE)
 
 ```
+
 
 ## Results overview
 
@@ -10031,6 +10104,8 @@ for (model_name in names(rocs_list)) {
 }
 
 ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=7))
+
+rocs_list_colon <- rocs_list
 ```
 
 ROC - genus
@@ -10044,155 +10119,144 @@ for (model_name in names(rocs_list)) {
                        model_name=model_name)
 }
 
-ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=7))
+p <- ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=7))
 ```
 
-<!-- # Paper-ready visualizations -->
+```{r,results='hide'}
+pdf("../figures/Q1/models_colon.pdf",
+    height =10,width = 10)
+p
+dev.off()
+```
 
-<!-- ## Alpha diversity -->
+# Paper-ready visualizations
 
-<!-- **Alpha diversity** -->
+## FIGURE 2
 
-<!-- ```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE} -->
-<!-- p_A <- alpha_div_plots$`Ileum Custom` +  -->
-<!--   ggtitle("Terminal ileum")+  -->
-<!--   theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15)) -->
+## Alpha diversity
 
-<!-- p_B <-  alpha_div_plots$`Colon Custom` +  -->
-<!--   ggtitle("Colon") +  -->
-<!--   theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15)) -->
+```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE}
+p_A <- alpha_div_plots$`terminal_ileum Country` +
+  ggtitle("Terminal ileum")+
+  theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15)) 
 
-<!-- Q1_alpha <- ggarrange(p_A,ggplot() + theme_minimal(),p_B,nrow=1, ncol=3, -->
-<!--                       widths = c(1,0.1,1)) -->
-<!-- Q1_alpha -->
-<!-- ``` -->
+p_B <-  alpha_div_plots$`colon Country` +
+  ggtitle("Colon") +
+  theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15)) 
 
-<!-- ## Beta diversity -->
+Q1_alpha <- ggarrange(p_A,ggplot() + theme_minimal(),p_B,nrow=1, ncol=3,
+                      widths = c(1,0.1,1))
+Q1_alpha
+```
 
-<!-- ASV level -->
-
-<!-- ```{r} -->
-
-<!-- ``` -->
-
-<!-- Genus level -->
-
-<!-- ```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE} -->
-<!-- pca_ti <- pca_plots_list$`Q1 Ileum Genus custom` + theme(legend.position = "none") -->
-<!-- pca_colon <- pca_plots_list$`Q1 Colon Genus custom` + theme(legend.position = "none") -->
-
-<!-- genus_Q1_beta <- ggarrange(pca_ti, -->
-<!--                            ggplot() + theme_minimal(), -->
-<!--                            pca_colon,ncol=3, -->
-<!--                            widths = c(1,0.1,1)) -->
-<!-- genus_Q1_beta -->
-<!-- ``` -->
-
-<!-- **Alpha + Beta diversity** -->
-
-<!-- ```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE} -->
-<!-- alpha_beta <- ggarrange(Q1_alpha,genus_Q1_beta, -->
-<!--                         ncol = 1,nrow=2,labels = c("A","B")) -->
-<!-- alpha_beta -->
-<!-- ``` -->
-
-<!-- ## Elastic net -->
-
-<!-- ASV level -->
-
-<!-- ```{r} -->
-
-<!-- ``` -->
-
-<!-- Genus level -->
-
-<!-- ```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE} -->
-<!-- roc_cs_ti <- roc_cs[4:6] -->
-<!-- roc_cs_colon <- roc_cs[10:12] -->
-
-<!-- roc_curve_ti <- roc_curve_all_custom(roc_cs_ti, Q = "Q1",legend = FALSE) -->
-
-<!-- roc_curve_colon <- roc_curve_all_custom(roc_cs_colon, Q="Q1",legend=FALSE)  -->
-
-<!-- roc_curve_plot <- ggarrange(ggplot() + theme_minimal(), -->
-<!--                             roc_curve_ti, -->
-<!--                             ggplot() + theme_minimal(), -->
-<!--                             roc_curve_colon, -->
-<!--                             ggplot() + theme_minimal(), -->
-<!--                             ncol=5, widths = c(0.1,1,0.2,1,0.1), -->
-<!--                             labels=c("","A","","B","")) -->
-
-<!-- roc_curve_plot <- ggarrange(roc_curve_ti, -->
-<!--                             ggplot() + theme_minimal(), -->
-<!--                             roc_curve_colon, -->
-<!--                             ggplot() + theme_minimal(), -->
-<!--                             ncol=4, widths = c(1,0.1,1,0.1)) -->
-<!-- roc_curve_plot -->
-
-<!-- ``` -->
-
-<!-- ```{r, fig.width=10, fig.height=12, fig.fullwidth=TRUE} -->
-<!-- alpha_beta_elastic <- ggarrange(Q1_alpha,genus_Q1_beta,roc_curve_plot, -->
-<!--                         ncol = 1,nrow=3,labels = LETTERS,heights = c(1,1,1)) -->
-<!-- alpha_beta_elastic -->
-<!-- ``` -->
-
-<!-- ## Dot heatmap - DAA -->
-
-<!-- ASV level -->
-
-<!-- ```{r} -->
-
-<!-- ``` -->
-
-<!-- Genus level -->
-
-<!-- ```{r, fig.width=10, fig.height=13, fig.fullwidth=TRUE} -->
-<!-- list_for_heatmap_ileum <- c(list_intersections[c(4,5,6)]) -->
-<!-- list_for_heatmap_colon <- c(list_intersections[c(10,11,12)]) -->
-
-<!-- names(list_for_heatmap_colon) <- gsub("Genus","",gsub("colon","",names(list_for_heatmap_colon))) -->
-<!-- names(list_for_heatmap_ileum) <- gsub("Genus","",gsub("Ileum","",names(list_for_heatmap_ileum))) -->
-
-<!-- p_ileum <- dot_heatmap_linda(list_for_heatmap_ileum, -->
-<!--                              ileum_taxa_tab) + xlab("") + ylab("") +  -->
-<!--   ggtitle("Terminal ileum") +  -->
-<!--   theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15), -->
-<!--         legend.position = "none") -->
+## Beta diversity
 
 
-<!-- p_colon <- dot_heatmap_linda(list_for_heatmap_colon, -->
-<!--                              colon_taxa_tab) + xlab("") + ylab("") + -->
-<!--   ggtitle("Colon") +  -->
-<!--   theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15), -->
-<!--         legend.position = "none") -->
+```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE}
+pca_ti <- pca_plots_list$`terminal_ileum genus custom` 
+pca_colon <- pca_plots_list$`colon genus custom` 
 
-<!-- heatmap_plot <- ggarrange(p_ileum, -->
-<!--                           p_colon, -->
-<!--                           ncol = 2)  -->
-<!-- heatmap_plot -->
-<!-- ``` -->
+genus_Q1_beta <- ggarrange(pca_ti,
+                           ggplot() + theme_minimal(),
+                           pca_colon,ncol=3,
+                           widths = c(1,0.1,1))
+genus_Q1_beta
+```
 
-<!-- ## All together -->
+**Alpha + Beta diversity**
 
-<!-- ```{r, fig.width=18, fig.height=10, fig.fullwidth=TRUE} -->
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+alpha_beta <- ggarrange(Q1_alpha,genus_Q1_beta,
+                        ncol = 1,nrow=2,labels = c("A","B"))
+alpha_beta
+```
 
-<!-- q1_plot <- ggarrange(alpha_beta_elastic, -->
-<!--                      ggplot()+ theme_minimal(), -->
-<!--                      heatmap_plot, -->
-<!--                       ggplot()+ theme_minimal(), -->
-<!--                      ncol=4,labels=c("","", "D",""),widths = c(1,0.2,0.8,0.15)) -->
-<!-- q1_plot -->
-<!-- ``` -->
+## Elastic net
 
-<!-- ```{r, eval=FALSE} -->
-<!-- pdf("clanok/obrazky/q1/Q1_plot_newalpha.pdf",height = 10,width = 17) -->
-<!-- q1_plot -->
-<!-- dev.off() -->
-<!-- ``` -->
+Genus level
 
-<!-- # Session info -->
+```{r, fig.width=10, fig.height=4, fig.fullwidth=TRUE}
+models_to_plot <- c("knn_model","rf_model","gbm_model","enet_model")
+names(models_to_plot) <- c("kNN","RF","GBoost","ENet")
 
-<!-- ```{r} -->
-<!-- sessionInfo() -->
-<!-- ``` -->
+# ILEUM
+plot_list_ileum <- list()
+for (model_name in models_to_plot) {
+  plot_list_ileum[[model_name]] <- 
+    roc_curve_all_custom(rocs_list[[model_name]][c(4:6)],
+                       Q="Q1",
+                       model_name=model_name,legend = FALSE) + 
+    ggtitle(names(models_to_plot)[which(model_name==models_to_plot)]) + 
+    theme(plot.title = element_text(face = "bold",size = 8)) 
+}
+
+roc_curve_ti <- ggarrange(plotlist = plot_list_ileum)
+
+# COLON
+
+plot_list_colon <- list()
+for (model_name in models_to_plot) {
+  plot_list_colon[[model_name]] <- 
+    roc_curve_all_custom(rocs_list[[model_name]][c(10:12)],
+                       Q="Q1",
+                       model_name=model_name,legend = FALSE) + 
+    ggtitle(names(models_to_plot)[which(model_name==models_to_plot)]) + 
+    theme(plot.title = element_text(face = "bold",size = 8))  
+}
+
+roc_curve_colon <- ggarrange(plotlist = plot_list_colon)
+
+
+roc_curve_plot <- ggarrange(roc_curve_ti,
+                            ggplot() + theme_minimal(),
+                            roc_curve_colon,
+                            ggplot() + theme_minimal(),
+                            ncol=4, widths = c(1,0.1,1,0.1))
+roc_curve_plot
+
+```
+
+```{r, fig.width=10, fig.height=12, fig.fullwidth=TRUE}
+alpha_beta_elastic <- ggarrange(Q1_alpha,genus_Q1_beta,roc_curve_plot,
+                        ncol = 1,nrow=3,labels = LETTERS,heights = c(1,1,1.2))
+alpha_beta_elastic
+```
+
+```{r,results='hide'}
+pdf("../figures/Q1/FIGURE2.pdf",paper = "a4",height = 10,width = 10)
+alpha_beta_elastic
+dev.off()
+```
+
+## Dot heatmap - DAA
+
+```{r, fig.width=10, fig.height=13, fig.fullwidth=TRUE}
+p_ileum <- dot_heatmap_ileum + 
+  ggtitle("Terminal ileum") +
+  theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15),
+        legend.position = "none")
+
+
+p_colon <- dot_heatmap_colon  +
+  ggtitle("Colon") +
+  theme(plot.title = element_text(hjust=0.5,face = "bold",size = 15),
+        legend.position = "none")
+
+heatmap_plot <- ggarrange(p_ileum,
+                          p_colon,
+                          ncol = 2)
+heatmap_plot
+```
+
+```{r,results='hide'}
+pdf("../figures/Q1/FIGURE3.pdf",
+    height =10,width = 8,paper="a4")
+heatmap_plot
+dev.off()
+```
+
+# Session info
+
+```{r}
+sessionInfo()
+```

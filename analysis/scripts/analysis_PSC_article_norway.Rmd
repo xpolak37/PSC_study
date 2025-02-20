@@ -843,7 +843,7 @@ volcano
 
 ##### MaAsLin2
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_ileum_uni_data, 
     input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
@@ -957,7 +957,7 @@ volcano
 
 ##### MaAsLin2
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_ileum_uni_data, 
     input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
@@ -1070,7 +1070,7 @@ volcano
 
 ##### MaAsLin2
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_ileum_uni_data, 
     input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
@@ -1263,7 +1263,7 @@ volcano <- ggarrange(volcano_1, ncol=3)
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_ileum_uni_data, 
     input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
@@ -1376,7 +1376,7 @@ volcano <- ggarrange(volcano_1)
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_ileum_uni_data, 
     input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
@@ -1489,7 +1489,7 @@ volcano <- ggarrange(volcano_1)
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_ileum_uni_data, 
     input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
@@ -1670,7 +1670,7 @@ volcano <- ggarrange(volcano_1)
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_ileum_uni_data, 
     input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
@@ -1783,7 +1783,7 @@ volcano
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_ileum_uni_data, 
     input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
@@ -1896,7 +1896,7 @@ volcano
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_ileum_uni_data, 
     input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
@@ -2861,7 +2861,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -2898,7 +2898,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -2936,7 +2936,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -2992,7 +2992,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -3030,7 +3030,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -3068,7 +3068,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -3891,7 +3891,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -3929,7 +3929,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -3967,7 +3967,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -4023,7 +4023,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -4062,7 +4062,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -4101,7 +4101,7 @@ gbm_model <- gbm_binomial(filt_ileum_uni_data,
                               sample_method = "atypboot",
                               outcome="Group", 
                               N=10,
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -4210,7 +4210,7 @@ knitr::kable(models_summ_df_ileum %>% dplyr::select(
 
 **ROC - ASV level**
 
-```{r,warning=FALSE}
+```{r,warning=FALSE,results='hide'}
 roc_curve_all_custom(roc_cs[c(1:3)], 
                      Q="Q1_norway",
                      model_name="enet_model")
@@ -4218,7 +4218,7 @@ roc_curve_all_custom(roc_cs[c(1:3)],
 
 **ROC - Genus level**
 
-```{r,warning=FALSE}
+```{r,warning=FALSE,results='hide'}
 roc_curve_all_custom(roc_cs[c(4:6)],Q="Q1_norway",
                      model_name="enet_model")
 ```
@@ -4249,7 +4249,7 @@ knitr::kable(final_df, caption="All models")
 
 ROC - ASV
 
-```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE}
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE,results='hide'}
 rocs_list <- supplements_models$roc_cs
 rocs_list[["enet_model"]] <- roc_cs
 
@@ -4266,7 +4266,7 @@ ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face=
 
 ROC - genus
 
-```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE}
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE,results='hide'}
 plot_list <- list()
 
 for (model_name in names(rocs_list)) {
@@ -5027,7 +5027,7 @@ volcano
 
 ###### MaAsLin2
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_colon_uni_data, 
     input_metadata = filt_colon_uni_metadata, min_abundance = 0,
@@ -5142,7 +5142,7 @@ volcano
 
 ###### MaAsLin2
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_colon_uni_data, 
     input_metadata = filt_colon_uni_metadata, min_abundance = 0,
@@ -5259,7 +5259,7 @@ volcano
 
 ###### MaAsLin2
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_colon_uni_data, 
     input_metadata = filt_colon_uni_metadata, min_abundance = 0,
@@ -5449,7 +5449,7 @@ volcano
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_colon_uni_data, 
     input_metadata = filt_colon_uni_metadata, min_abundance = 0,
@@ -5567,7 +5567,7 @@ volcano
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_colon_uni_data, 
     input_metadata = filt_colon_uni_metadata, min_abundance = 0,
@@ -5683,7 +5683,7 @@ volcano
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_colon_uni_data, 
     input_metadata = filt_colon_uni_metadata, min_abundance = 0,
@@ -5858,7 +5858,7 @@ volcano
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_colon_uni_data, 
     input_metadata = filt_colon_uni_metadata, min_abundance = 0,
@@ -5976,7 +5976,7 @@ volcano
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_colon_uni_data, 
     input_metadata = filt_colon_uni_metadata, min_abundance = 0,
@@ -6092,7 +6092,7 @@ volcano
 
 **MaAsLin2**
 
-```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+```{r, echo=FALSE,results='hide',message=FALSE,warning=FALSE,results='hide'}
 fit_data = Maaslin2(
     input_data = filt_colon_uni_data, 
     input_metadata = filt_colon_uni_metadata, min_abundance = 0,
@@ -7067,7 +7067,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -7106,7 +7106,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -7146,7 +7146,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -7204,7 +7204,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -7244,7 +7244,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -7284,7 +7284,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -8145,7 +8145,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -8185,7 +8185,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -8225,7 +8225,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -8283,7 +8283,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -8324,7 +8324,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -8365,7 +8365,7 @@ gbm_model <- gbm_binomial(filt_colon_uni_data,
                               outcome="Group", 
                               N=10,
                           clust_var="Patient",
-                              reuse=TRUE,
+                              reuse=FALSE,
                               file=model_name,
                               Q="Q1_norway")
 
@@ -8498,7 +8498,7 @@ knitr::kable(models_summ_df_colon %>% dplyr::select(
 
 **ROC - ASV level**
 
-```{r,warning=FALSE}
+```{r,warning=FALSE,results='hide'}
 roc_curve_all_custom(roc_cs[c(7:9)], 
                      Q="Q1_norway",
                      model_name="enet_model")
@@ -8506,7 +8506,7 @@ roc_curve_all_custom(roc_cs[c(7:9)],
 
 **ROC - Genus level**
 
-```{r,warning=FALSE}
+```{r,warning=FALSE,results='hide'}
 roc_curve_all_custom(roc_cs[c(10:12)],Q="Q1_norway",
                      model_name="enet_model")
 ```
@@ -8538,7 +8538,7 @@ write.csv(final_df,file=file.path(path,"AUC_all_models.csv"),row.names = FALSE)
 
 ROC - ASV
 
-```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE}
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE,results='hide'}
 rocs_list <- supplements_models$roc_cs
 rocs_list[["enet_model"]] <- roc_cs
 
@@ -8555,7 +8555,7 @@ ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face=
 
 ROC - genus
 
-```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE}
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE,warning=FALSE,results='hide'}
 plot_list <- list()
 
 for (model_name in names(rocs_list)) {

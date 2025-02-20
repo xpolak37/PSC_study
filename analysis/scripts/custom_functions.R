@@ -31,6 +31,7 @@ suppressMessages(suppressWarnings({
   library(ranger)
   library(doParallel)
   library(gbm)
+  library(tidyr)
 }))
 ## Basic functions for data processing ----
 
@@ -51,7 +52,8 @@ read_counts <- function(asv_table, text=FALSE, line=5000){
     geom_point( aes(x=reorder(Sample,Count), y=Count), alpha=.8, show.legend = TRUE,colour="#071952") +
     geom_hline(yintercept = line, linetype="dashed", 
                color = "red") + 
-    theme_bw() + 
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
     theme(
       axis.text.y=element_blank(), 
       axis.ticks.y=element_blank(),
@@ -167,7 +169,10 @@ merging_data <- function(asv_tab_1, asv_tab_2,
   } else if (Q == "Q2"){
     # keep only rPSC vs non-rPSC vs Healthy
     merged_metadata <- merged_metadata[merged_metadata$Group %in% c("rPSC","non-rPSC","healthy"),]
-  } 
+  } else if (Q=="Q3"){
+    merged_metadata <- merged_metadata[merged_metadata$Group %in% c("rPSC","pre_ltx"),]
+    merged_metadata$Group <- "PSC"
+  }
   merged_asv_tab <- merged_asv_tab[,c(TRUE,colnames(merged_asv_tab)[-1] %in% merged_metadata$SampleID)]
   merged_taxa_tab <- merged_taxa_tab[merged_taxa_tab$SeqID %in% merged_asv_tab$SeqID,]
   
@@ -428,10 +433,11 @@ binomial_prep <- function(asv_table,taxa_table,metadata,group, patient=FALSE,
   } else message("Invalid usage - use one of ml_* or linDA")
 }
 
+
 binomial_prep_psc_effect <- function(asv_table,taxa_table,metadata,df_effect, patient=FALSE,
                           usage="linDA"){
   
-  if (TRUE %in% grepl("rPSC",colnames(df_effect))){
+  if (TRUE %in% grepl("rPSC",unique(metadata$Group))){
     group <- c("rPSC","non-rPSC")
   } else group <- c("pre_ltx","post_ltx")
   
@@ -457,7 +463,7 @@ binomial_prep_psc_effect <- function(asv_table,taxa_table,metadata,df_effect, pa
   uni_metadata <- filt_data[[3]] %>% column_to_rownames("SampleID")
   
   # only selected TAXA
-  wanted_asvs <- df_effect$ASV
+  wanted_asvs <- df_effect$SeqID
   uni_data <- uni_data[wanted_asvs,]
   
   data_checked <- data_check(
@@ -468,9 +474,14 @@ binomial_prep_psc_effect <- function(asv_table,taxa_table,metadata,df_effect, pa
   uni_tax <- data_checked[[2]]
   uni_metadata <- metadata[colnames(uni_data),]
   
-  if (usage=="glmnet"){
-    uni_data <- vegan::decostand(uni_data,method = "clr", MARGIN = 2,pseudocount=0.5) %>% 
-      as.matrix()
+  if (grepl("ml_",usage)){
+    if (usage=="ml_clr"){
+      uni_data <- vegan::decostand(uni_data,method = "clr", MARGIN = 2,pseudocount=0.5) %>% 
+        as.matrix()
+    } else if(usage=="ml_ra"){
+      uni_data <- as.data.frame(apply(uni_data, 2, function(x) x / sum(x)))
+      uni_data[is.na(uni_data)] <- 0
+    }
     
     uni_data <- uni_data %>% t() %>% as.data.frame()
     uni_data$Group <- uni_metadata[rownames(uni_data),"Group"]
@@ -1039,6 +1050,10 @@ pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
     co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","pre_ltx","pre_ltx"),
                      "2"=c("non-rPSC","rPSC","pre_ltx","rPSC","non-rPSC","rPSC")) %>% t()
   }
+  if ("ibd" %in% factors) {
+    co <- data.frame("1"=c("no_ibd"),
+                     "2"=c("ibd")) %>% t()
+  } 
   models <- c()
   names <- c()
   emeans_models <- c()
@@ -1052,9 +1067,9 @@ pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
     model <- glm_renaming(model,c(co[1,elem],co[2,elem]))
     mean_group <- model[1,]
     if (nrow(model)>2){
-      if (model[4,"Pr(>|t|)"]<0.05){
+      if (model[4,"Pr(>|t|)"]<0.1){
         model_raw <- lm(as.formula(formula), data = x_sub)
-        emeans_model <- as.data.frame(emmeans(model_raw, pairwise ~ Group | Country)$contrasts)
+        emeans_model <- as.data.frame(contrast(emmeans(model_raw, pairwise ~ Group | Country),method="revpairwise"))
         emeans_models <- rbind(emeans_models,emeans_model)
       } 
     }
@@ -1066,8 +1081,12 @@ pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
   rownames(means) <- co[1,]
   models <- models[-grep("^[(].+[)]$", names),]
   models %<>% as.data.frame() %>% `row.names<-`(names[-grep("^[(].+[)]$", names)])
-  p.adjusted <- p.adjust(models[,"Pr(>|t|)"],method=p.adjust.m)
-  models$p.adj <- p.adjusted
+  
+  if (ncol(co)>1){
+    p.adjusted <- p.adjust(models[,"Pr(>|t|)"],method=p.adjust.m)
+    models$p.adj <- p.adjusted
+  } else models$p.adj <- p.adjusted <- models[,"Pr(>|t|)"]
+  
   
   sig = c(rep('',length(p.adjusted)))
   sig[p.adjusted <= 0.05] <-'*'
@@ -1098,7 +1117,12 @@ pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
   if (!FALSE %in% (c("healthy","non-rPSC","rPSC","pre_ltx") %in% factors)){
     co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","pre_ltx","pre_ltx"),
                      "2"=c("non-rPSC","rPSC","pre_ltx","rPSC","non-rPSC","rPSC")) %>% t()
-  }
+  } 
+  if ("ibd" %in% factors) {
+    co <- data.frame("1"=c("no_ibd"),
+                     "2"=c("ibd")) %>% t()
+  } 
+  
   models <- c()
   names <- c()
   result_lists <- c()
@@ -1112,7 +1136,7 @@ pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
     model <- lmer_renaming(model,c(co[1,elem],co[2,elem]))
     mean_group <- model[1,]
     if (nrow(model)>2){
-      if (model[4,"Pr(>|t|)"]<0.05){
+      if (model[4,"Pr(>|t|)"]<0.15){
       # CZ
       group1_group2_cz <- as.data.frame(coef(summary(lmer(as.formula(gsub(" \\* Country","",formula)), data = subset(x_sub,Country=="CZ")))))
       
@@ -1160,9 +1184,13 @@ pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
   rownames(means) <- co[1,]
   models <- models[-grep("^[(].+[)]$", names),]
   models %<>% as.data.frame() %>% `row.names<-`(names[-grep("^[(].+[)]$", names)])
-  p.adjusted <- p.adjust(models[,"Pr(>|t|)"],method=p.adjust.m)
-  models$p.adj <- p.adjusted
   
+  if (ncol(co)>1){
+    p.adjusted <- p.adjust(models[,"Pr(>|t|)"],method=p.adjust.m)
+    models$p.adj <- p.adjusted
+  } else models$p.adj <- p.adjusted <- models[,"Pr(>|t|)"]
+  
+
   sig = c(rep('',length(p.adjusted)))
   sig[p.adjusted <= 0.05] <-'*'
   sig[p.adjusted <= 0.01] <-'**'
@@ -1232,6 +1260,12 @@ pairwise.adonis <- function(x,factors, covariate=NULL, interaction=FALSE,patient
     co <- data.frame("1"=c("rPSC","rPSC","non-rPSC"),
                      "2"=c("non-rPSC","healthy","healthy")) %>% t()
   } 
+  
+  if ("ibd" %in% factors) {
+    co <- data.frame("1"=c("no_ibd"),
+                     "2"=c("ibd")) %>% t()
+  } 
+
   pairs_factor <- c()
   Df_factor <- c()
   SumsOfSqs_factor <- c()
@@ -1638,6 +1672,107 @@ lmer_renaming <- function(lmer_data, group){
 }
 
 ## Visualization functions ----
+horizontal_barplot <- function(wb,taxa){
+  sheets_names <- sheets(wb)
+  groups_names <- unique(unlist(strsplit(sheets_names,split=" vs ")))
+  prevalences_df <- NULL
+  
+  for (name in sheets_names){
+    group1_name <- unlist(strsplit(name,split=" vs "))[1]
+    group2_name <- unlist(strsplit(name,split=" vs "))[2]
+    df <- readWorkbook(wb, sheet = name)
+    #df <- df[df$final_sig,]
+    if (is.null(prevalences_df)){
+      prevalences_df <- df[,c("SeqID",paste0("PREVALENCE_.",group1_name),
+                              paste0("PREVALENCE_.",group2_name))] %>% `rownames<-`(NULL)
+    } else{
+      prevalences_df <- merge(prevalences_df,
+                               df[,c("SeqID",paste0("PREVALENCE_.",group1_name),
+                                     paste0("PREVALENCE_.",group2_name))] %>% `rownames<-`(NULL),all=TRUE)
+    }
+  }
+  
+  # Clean the dataframe by grouping and filling NAs
+  if (any(grepl("post_ltx",colnames(prevalences_df)))){
+    prevalences_df <- prevalences_df %>%
+    group_by(SeqID) %>%
+    summarise(
+      PREVALENCE_.healthy = coalesce(PREVALENCE_.healthy[1], PREVALENCE_.healthy[2]),
+      PREVALENCE_.post_ltx = coalesce(PREVALENCE_.post_ltx[1], PREVALENCE_.post_ltx[2]),
+      PREVALENCE_.pre_ltx = coalesce(PREVALENCE_.pre_ltx[1], PREVALENCE_.pre_ltx[2])
+    ) 
+  } else if (any(grepl("rPSC",colnames(prevalences_df)))){
+    prevalences_df <- prevalences_df %>%
+      group_by(SeqID) %>%
+      summarise(
+        PREVALENCE_.healthy = coalesce(PREVALENCE_.healthy[1], PREVALENCE_.healthy[2]),
+        `PREVALENCE_.non-rPSC` = coalesce(`PREVALENCE_.non-rPSC`[1], `PREVALENCE_.non-rPSC`[2]),
+        PREVALENCE_.rPSC = coalesce(PREVALENCE_.rPSC[1], PREVALENCE_.rPSC[2])
+      ) 
+  } else if (any(grepl("ibd",colnames(prevalences_df)))){
+    prevalences_df <- prevalences_df %>%
+      group_by(SeqID) %>%
+      summarise(
+        PREVALENCE_.no_ibd = coalesce(PREVALENCE_.no_ibd[1], PREVALENCE_.no_ibd[2]),
+        `PREVALENCE_.ibd` = coalesce(`PREVALENCE_.ibd`[1], `PREVALENCE_.ibd`[2]),
+      ) 
+    } else cat("CHYBA")
+  
+  
+
+  prevalences_df <- prevalences_df %>% dplyr::filter(SeqID %in% taxa) %>%
+    dplyr::mutate(SeqID=factor(SeqID,levels=taxa))
+  
+  
+  prevalences_df_melt <- melt(prevalences_df)
+  
+  prevalences_df_melt <- prevalences_df_melt %>%
+    mutate(variable = case_when(
+      variable == "PREVALENCE_.healthy" ~ "HC",
+      variable == "PREVALENCE_.post_ltx" ~ "post_LTx",
+      variable == "PREVALENCE_.pre_ltx" ~ "pre_LTx",
+      variable == "PREVALENCE_.rPSC" ~ "rPSC",
+      variable == "PREVALENCE_.non-rPSC" ~ "non-rPSC",
+      variable == "PREVALENCE_.ibd" ~ "ibd",
+      variable == "PREVALENCE_.no_ibd" ~ "no_ibd",
+      TRUE ~ variable  # Keep other values as is
+    ))
+  
+  if ("post_LTx" %in% prevalences_df_melt$variable) {
+    colors <- c("#309f87","#f9c675","#425387","#d55c4a")
+    prevalences_df_melt$variable <- factor(prevalences_df_melt$variable,levels = c("HC","pre_LTx","post_LTx"))
+  }
+  else if ("rPSC" %in% prevalences_df_melt$variable) {
+    colors <- c("#309f87","#F08080","#A00000")
+    prevalences_df_melt$variable <- factor(prevalences_df_melt$variable,levels = c("HC","non-rPSC","rPSC"))
+  } else if ("ibd" %in% alpha_data$Group){
+    #colors <- c("#1B7837","#B2182B")  
+    #colors <- c("#D04E36", "#3F7D3C")  
+    colors <- c("#A06A2C", "#B2182B")  
+    
+    prevalences_df_melt$variable <- factor(prevalences_df_melt$variable,levels = c("no_ibd","ibd"))
+  }
+  else (cat("chyba","\n"))
+  
+  p <- ggplot(prevalences_df_melt, aes(x = SeqID, y = value, fill = variable)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    coord_flip() + 
+    scale_fill_manual(values=colors)  +
+    theme_minimal() + 
+    theme(axis.title.x =element_text(size=10),
+          axis.text.x = element_text(size=4),
+          axis.text.y = element_blank(),
+          panel.grid = element_blank(),
+          axis.line.y.left = element_blank(),
+          axis.line.x.bottom = element_blank(),
+          axis.ticks.y.left = element_blank())+
+    ylab("Prevalence") + 
+    xlab("") + 
+    theme(legend.position = "none") #+ 
+    #scale_y_reverse()
+
+  return(p)
+}
 
 mpse_barplot <- function(mpse_object, taxonomic_level="Genus", topn=20){
   p <- ikem_mpse %>%
@@ -1653,16 +1788,107 @@ mpse_barplot <- function(mpse_object, taxonomic_level="Genus", topn=20){
 }
 
 boxplot_subgroups <-function(alpha_data,labels){
+  alpha_data <- alpha_data %>%
+    mutate(Group = case_when(
+      Group == "healthy" ~ "HC",
+      Group == "post_ltx" ~ "post_LTx",
+      Group == "pre_ltx" ~ "pre_LTx",
+      TRUE ~ Group  # Keep other values as is
+    ))
+  
+  if ("post_LTx" %in% alpha_data$Group) {
+    colors <- c("#309f87","#f9c675","#425387","#d55c4a")
+    alpha_data$Group <- factor(alpha_data$Group,levels = c("HC","pre_LTx","post_LTx"))
+  }
+  else if ("rPSC" %in% alpha_data$Group) {
+    colors <- c("#309f87","#F08080","#A00000")
+    alpha_data$Group <- factor(alpha_data$Group,levels = c("HC","non-rPSC","rPSC"))
+  }
+  else (cat("chyba","\n"))
   alpha_data_melted <- melt(alpha_data)
+  
+  
   p <- ggplot() + 
     geom_boxplot(data=alpha_data_melted, aes(x=Group, y=value, fill=Group, color=Country)) + 
     geom_text(data = labels, aes(x=x, y= y, label = label),size=3) +
     scale_color_manual(values=c("#000000","#000000","#000000","#000000")) +
     scale_fill_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) + 
     guides(fill="none",color = "none") + 
-    theme_bw() + 
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
     theme(axis.text.x = element_text(angle = 90, hjust = 1))+ 
     facet_wrap(~variable, ncol = 4,scales = "free")
+  return(p)
+}
+
+alpha_diversity_countries <-function(alpha_data,show_legend=FALSE){
+  alpha_data <- alpha_data %>%
+    mutate(Group = case_when(
+      Group == "healthy" ~ "HC",
+      Group == "post_ltx" ~ "post_LTx",
+      Group == "pre_ltx" ~ "pre_LTx",
+      TRUE ~ Group  # Keep other values as is
+    ))
+  
+  if ("post_LTx" %in% alpha_data$Group) {
+    colors <- c("#309f87","#f9c675","#425387","#d55c4a")
+    alpha_data$Group <- factor(alpha_data$Group,levels = c("HC","pre_LTx","post_LTx"))
+  } else if ("rPSC" %in% alpha_data$Group) {
+    colors <- c("#309f87","#F08080","#A00000")
+    alpha_data$Group <- factor(alpha_data$Group,levels = c("HC","non-rPSC","rPSC"))
+  } else if ("ibd" %in% alpha_data$Group){
+    #colors <- c("#1B7837","#B2182B")  
+    #colors <- c("#D04E36", "#3F7D3C")  
+    colors <- c("#A06A2C", "#B2182B")  
+
+    alpha_data$Group <- factor(alpha_data$Group,levels = c("no_ibd","ibd"))
+  }
+  else (print("chyba","\n"))
+  
+  alpha_data$Country <- factor(alpha_data$Country,levels = c('CZ','NO'))
+  alpha_richness_data <- melt(alpha_data) %>% dplyr::filter(variable=="Observe")
+  
+  richness_limit <- max(alpha_data$Observe) + 0.2*max(alpha_data$Observe)
+  
+  p_richness <- ggplot(alpha_richness_data, aes(x=Group, y=value, fill=Country)) + 
+    geom_boxplot(aes(fill=Country), outlier.shape = NA, position=position_dodge(width=0.8)) + 
+    geom_jitter(aes(x=Group, y=value, color=Group, shape=Country), 
+                position=position_jitterdodge(jitter.width=0.7, dodge.width=0.8), 
+                size=1) + 
+    scale_color_manual(values=colors) +
+    scale_fill_manual(values=c("#ffffff","#ffffff")) +
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
+    xlab("") + 
+    ylab("Richness") + 
+    scale_y_continuous(breaks = seq(0, richness_limit, by = 50)) + 
+    ylim(0,richness_limit)  + 
+    theme(axis.text.x = element_text(angle = 45,face = "bold",vjust = 0.5))
+  
+  alpha_shannon_data <- melt(alpha_data) %>% dplyr::filter(variable=="Shannon")
+  shannon_limit <- max(alpha_data$Shannon) + 0.2*max(alpha_data$Shannon)
+  
+  p_shannon <- ggplot(alpha_shannon_data, aes(x=Group, y=value, fill=Country)) + 
+    geom_boxplot(aes(fill=Country), outlier.shape = NA, position=position_dodge(width=0.8)) + 
+    geom_jitter(aes(x=Group, y=value, color=Group, shape=Country), 
+                position=position_jitterdodge(jitter.width=0.7, dodge.width=0.8), 
+                size=1) + 
+    scale_color_manual(values=colors) +
+    scale_fill_manual(values=c("#ffffff","#ffffff")) +
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
+    xlab("") + 
+    ylab("Shannon") + 
+    scale_y_continuous(breaks = seq(0, shannon_limit, by = 50)) + 
+    ylim(0,shannon_limit) + 
+    theme(axis.text.x = element_text(angle = 45,face = "bold",vjust = 0.5))
+  
+  if (show_legend){
+    p <- ggarrange(p_richness,p_shannon,common.legend = TRUE,legend="right")
+  } else {
+    p <- ggarrange(p_richness,p_shannon,common.legend = TRUE,legend="none")
+  }
+  
   return(p)
 }
 
@@ -1678,7 +1904,8 @@ alpha_diversity_custom <- function(alpha_data, size=1.5){
     scale_color_manual(values=colors) + 
     scale_fill_manual(values=colors) + 
     guides(fill="none",color = "none") + 
-    theme_bw() + 
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
     theme(axis.text.x = element_text(angle = 0,face = "bold"))+ 
     facet_wrap(~variable, ncol = 4,scales = "free")  + 
     xlab("") + 
@@ -1701,8 +1928,16 @@ alpha_diversity_custom_2 <- function(alpha_data, size=1.5,width=0.2){
     colors <- c("#309f87","#f9c675","#425387","#d55c4a")
     alpha_data$Group <- factor(alpha_data$Group,levels = c("HC","pre_LTx","post_LTx"))
   }
-  else if ("rPSC" %in% alpha_data$Group) colors <- c("#309f87","#F08080","#A00000")
-  else (cat("chyba","\n"))
+  else if ("rPSC" %in% alpha_data$Group) {
+    colors <- c("#309f87","#F08080","#A00000")
+    alpha_data$Group <- factor(alpha_data$Group,levels = c("HC","non-rPSC","rPSC"))
+  } else if ("ibd" %in% alpha_data$Group){
+    #colors <- c("#1B7837","#B2182B")  
+    #colors <- c("#D04E36", "#3F7D3C")  
+    colors <- c("#A06A2C", "#B2182B")  
+    
+    alpha_data$Group <- factor(alpha_data$Group,levels = c("no_ibd","ibd"))
+  } else (print("chyba","\n"))
   richness_limit <- max(alpha_data$Richness) + 0.2*max(alpha_data$Richness)
   p_richness <- ggplot() + 
     geom_boxplot(data=alpha_data, aes(x=Group, y=Richness),outliers = FALSE) + 
@@ -1714,7 +1949,8 @@ alpha_diversity_custom_2 <- function(alpha_data, size=1.5,width=0.2){
     scale_color_manual(values=colors) + 
     scale_fill_manual(values=colors) + 
     guides(fill="none",color = "none") + 
-    theme_bw() + 
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 1)) + 
     theme(axis.text.x = element_text(angle = 45,face = "bold",vjust = 0.5))+ 
     xlab("") + 
     ylab("Richness")
@@ -1730,8 +1966,9 @@ alpha_diversity_custom_2 <- function(alpha_data, size=1.5,width=0.2){
     scale_color_manual(values=colors) + 
     scale_fill_manual(values=colors) + 
     guides(fill="none",color = "none") + 
-    theme_bw() + 
+    theme_classic() + 
     theme(axis.text.x = element_text(angle = 45,face = "bold",vjust = 0.5))+ 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 1)) + 
     xlab("") + 
     ylab("Shannon")
   
@@ -1826,11 +2063,30 @@ pca_plots <- function(mpse_object,by="Group"){
   
 }
 
+ordiArrowMul_custom <- function (x, ord, at = c(0,0), fill = 0.75,
+                            display, choices = c(1,2)) {
+  X <- do.call(rbind,scores(x,c("vectors", "factors")))
+  u <- c(0,max(abs(range(ord$vectors[,1]))),0,max(abs(range(ord$vectors[,2]))))
+  u <- u - rep(at, each = 2)
+  r <- c(range(X[,1], na.rm = TRUE), range(X[,2], na.rm = TRUE))
+  ## 'rev' takes care of reversed axes like xlim(1,-1)
+  rev <- sign(diff(u))[-2]
+  if (rev[1] < 0)
+    u[1:2] <- u[2:1]
+  if (rev[2] < 0)
+    u[3:4] <- u[4:3]
+  u <- u/r
+  u <- u[is.finite(u) & u > 0]
+  return(fill * min(u))
+}
+
 pca_plot_custom <- function(asv_table,taxa_table,metadata, 
                             measure="robust.aitchison",
                             show_boxplots = TRUE,
                             variable = "Group", size=2,
-                            show_legend=TRUE){
+                            show_legend=TRUE,
+                            clinical=FALSE,
+                            clinical_metadata=NULL){
   
   metadata <- metadata %>%
     mutate(Group = case_when(
@@ -1840,11 +2096,43 @@ pca_plot_custom <- function(asv_table,taxa_table,metadata,
       TRUE ~ Group  # Keep other values as is
     ))
   
+  #metadata$Group <- factor(metadata$Group,levels = c("HC","pre_LTx","non-rPSC","rPSC"))
+  if (clinical & !is.null(clinical_metadata)){
+    clinical_metadata <- clinical_metadata %>%
+      mutate(Group = case_when(
+        Group == "healthy" ~ "HC",
+        Group == "post_ltx" ~ "post_LTx",
+        Group == "pre_ltx" ~ "pre_LTx",
+        TRUE ~ Group  # Keep other values as is
+      )) %>% 
+      dplyr::filter(SampleID %in% metadata$SampleID) %>%
+      column_to_rownames("SampleID") %>%
+      dplyr::select(-c(Matrix,Group,Country))
+    
+    if (length(unique(clinical_metadata$PatientID))==nrow(clinical_metadata)){
+      clinical_metadata %<>% dplyr::select(-c(PatientID))
+    }
+  }
+  
   if ("post_LTx" %in% metadata$Group) {
-    colors <- c("#309f87","#f9c675","#425387","#d55c4a")
+    colors <- c("#309f87","#f9c675","#425387")
     metadata$Group <- factor(metadata$Group,levels = c("HC","pre_LTx","post_LTx"))
   }
-  else if ("rPSC" %in% metadata$Group) colors <- c("#309f87","#F08080","#A00000")
+  else if (("rPSC" %in% metadata$Group) & 
+           ("pre_LTx" %in% metadata$Group)) {
+    colors <- c("#309f87","#f9c675","#F08080","#A00000")
+    metadata$Group <- factor(metadata$Group,levels = c("HC","pre_LTx","non-rPSC","rPSC"))
+  }
+  else if ("ibd" %in% metadata$Group){
+    #colors <- c("#1B7837","#B2182B")  
+    #colors <- c("#D04E36", "#3F7D3C")  
+    colors <- c("#A06A2C", "#B2182B")  
+    
+    metadata$Group <- factor(metadata$Group,levels = c("no_ibd","ibd"))
+  }
+  else {colors <- c("#309f87","#F08080","#A00000")
+  metadata$Group <- factor(metadata$Group,levels = c("HC","non-rPSC","rPSC"))
+  }
   
   ps <- construct_phyloseq(asv_table,taxa_table,metadata)
   if (measure=="robust.aitchison"){
@@ -1864,6 +2152,7 @@ pca_plot_custom <- function(asv_table,taxa_table,metadata,
   distMat <- phyloseq::distance(ps, method = measure_final, type = "samples")
   
   ord <- phyloseq::ordinate(ps, method = "PCoA", distance = distMat)
+  
   imp_vec <- ord$values$Relative_eig
   pca_vec <- ord$vectors
   
@@ -1871,14 +2160,71 @@ pca_plot_custom <- function(asv_table,taxa_table,metadata,
   y_lab = paste("PCo2 ", "(",round(imp_vec[2]*100,2),"%", ")", sep="")
   
   p <- ggplot(data_for_pca) + 
-    geom_point(aes(x=pca_vec[,1],y=pca_vec[,2],color=!!sym(variable),shape=Country),
+    geom_point(aes(x=pca_vec[,1],
+                   y=pca_vec[,2],
+                   color=!!sym(variable),
+                   shape=Country),
                show.legend = show_legend,size=size) + 
     stat_ellipse(aes(x=pca_vec[,1],y=pca_vec[,2],color=!!sym(variable)),show.legend = FALSE) + 
     xlab(x_lab)+
     ylab(y_lab)+
-    theme_bw() + 
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
     theme(legend.position = "right") + 
     scale_color_manual(values=colors)
+  
+  if (clinical){
+    set.seed(123)
+    if ("PatientID" %in% colnames(clinical_metadata)){
+      my_df <- ord$vectors
+      clinical_metadata <- clinical_metadata[rownames(my_df),]
+      #my_df <- my_df[rownames(clinical_metadata),]
+      my_df <- cbind(my_df,PatientID=clinical_metadata$PatientID) %>% 
+        as.data.frame() %>% 
+        rownames_to_column("SampleID")
+      my_df <- my_df %>%
+        #group_by(PatientID) %>%
+        distinct(PatientID, .keep_all = TRUE) %>%
+        as.data.frame() %>%
+        column_to_rownames("SampleID") %>%
+        dplyr::select(-PatientID) #%>%
+        #as.numeric() %>%
+        #as.matrix() 
+      sample_names <- rownames(my_df)
+      ord$vectors <- as.data.frame((lapply(my_df, as.numeric))) %>%
+        `rownames<-`(sample_names) %>% as.matrix()
+      clinical_metadata %<>% dplyr::select(-PatientID)
+      clinical_metadata <- clinical_metadata[rownames(ord$vectors),]
+    }
+    
+    fit <- envfit(ord=ord$vectors, env=clinical_metadata, perm = 999,na.rm=TRUE)
+    vector_coordinates <- as.data.frame(scores(fit, "vectors")) * ordiArrowMul_custom(fit, ord)
+    vector_coordinates <- vector_coordinates[fit$vectors$pvals < 0.1,]
+    factor_coordinates <- as.data.frame(scores(fit, "factors")) * ordiArrowMul_custom(fit,ord)
+    factor_coordinates <- factor_coordinates[fit$factors$pvals < 0.1,]
+    pca_loadings <- rbind(vector_coordinates,factor_coordinates)
+    
+    # Radial shift function
+    rshift = function(r, theta, a=0.03, b=0.03) {
+      r + a + b*abs(cos(theta))
+    }
+    
+    pca_loadings %<>% dplyr::mutate(r = sqrt(Axis.1^2 + Axis.2^2),
+                                   theta = atan2(Axis.2,Axis.1),
+                                   rnew = rshift(r, theta),
+                                   xnew = rnew*cos(theta),
+                                   ynew = rnew*sin(theta)) %>%
+      rownames_to_column("Variable")
+    
+    p <- p + 
+      geom_segment(data = pca_loadings, aes(x = 0, y = 0, xend = Axis.1, yend = Axis.2),
+                          arrow = arrow(length = unit(0.1, "cm")), 
+                          color = "black") + 
+      #geom_text(data = pca_loadings, aes(x = xnew, y = ynew, label = Variable), size=2)
+    ggrepel::geom_text_repel(data = pca_loadings, aes(x = xnew, y = ynew, label = Variable), 
+                             size=2.5, force = 0.01,force_pull = 1)
+  }
+  
   if (show_boxplots){
     pmain <- p
     xdens <- axis_canvas(pmain,axis="x") +  
@@ -1937,6 +2283,7 @@ is_dna_sequence <- function(sequence) {
 heatmap_correlation <- function(corrs){
   
 }
+
 
 heatmap_linda <- function(linda.output,taxa_tab){
 
@@ -2043,7 +2390,7 @@ heatmap_linda <- function(linda.output,taxa_tab){
   return(p)
 }
 
-dot_heatmap_linda <- function(raw_linda, uni_df,
+dot_heatmap_linda <- function(raw_linda, uni_list,
                               taxa_table, group=NULL){
   if (class(raw_linda)=="data.frame") {
     raw_linda <- raw_linda[, c("SeqID","Taxonomy","padj", "log2FoldChange","MEDIAN_clr_ALL")]
@@ -2057,11 +2404,17 @@ dot_heatmap_linda <- function(raw_linda, uni_df,
       else wanted_list <- raw_linda
     } else wanted_list <- raw_linda[group]
     
-    raw_linda <- lapply(wanted_list, function(df) {
-      df <- merge(df,uni_df[,c("SeqID","MEDIAN_clr_ALL")],by="SeqID",all.x = TRUE)
-      df[, c("SeqID","Taxonomy","padj", "log2FoldChange","MEDIAN_clr_ALL")]
-      return(df)
-      })
+    # Assuming wanted_list and uni_list are lists of dataframes
+    raw_linda <- Map(function(wanted_df, uni_df) {
+      merge(wanted_df, uni_df[, c("SeqID", "MEDIAN_clr_ALL")], by = "SeqID", all.x = TRUE)
+    }, wanted_list, uni_list)
+    
+    
+    # raw_linda <- lapply(wanted_list, function(df) {
+    #   df <- merge(df,uni_df[,c("SeqID","MEDIAN_clr_ALL")],by="SeqID",all.x = TRUE)
+    #   df[, c("SeqID","Taxonomy","padj", "log2FoldChange","MEDIAN_clr_ALL")]
+    #   return(df)
+    #   })
     #raw_linda <- lapply(wanted_list, function(df) df[, c("ASV","Taxonomy","padj", "log2FoldChange","MEDIAN ALL","Taxonomy")])
     
     names(raw_linda) <- gsub("(terminal_ileum)|(colon)|(ASV)|(genus)","",names(raw_linda))
@@ -2190,7 +2543,7 @@ dot_heatmap_linda <- function(raw_linda, uni_df,
   plot_df_combined <- base::merge(plot_df_combined, plot_df_melt_median, by = c("SeqID","Variable"))
   
   # Check for NAs and remove them if necessary
-  plot_df_combined <- na.omit(plot_df_combined,)
+  #plot_df_combined <- na.omit(plot_df_combined)
   
   plot_df_combined %<>% mutate(median_clr = Median)
   plot_df_combined$SeqID <- factor(plot_df_combined$SeqID,levels = plot_df$SeqID)
@@ -2325,6 +2678,7 @@ volcano_plot_ancom <- function(ancom_output,taxa_table,cutoff.pval=0.05, cutoff.
   return(p)
 }
 
+
 volcano_plot_maaslin <- function(maaslin_output,taxa_table,cutoff.pval=0.05, cutoff.lfc=1,variable="Group"){
   
   # group effect
@@ -2347,6 +2701,7 @@ volcano_plot_maaslin <- function(maaslin_output,taxa_table,cutoff.pval=0.05, cut
   data_called <- data_df[called,]
   taxa_table <- taxa_table %>% column_to_rownames("SeqID")
   taxonomic_level <- colnames(taxa_table)[ncol(taxa_table)]
+  if (taxonomic_level=="Species") taxonomic_level = "Genus"
   data_called$name <- taxa_table[data_called$name,taxonomic_level]
   
   maximum <- max(c(abs(min(data_df$x)), abs(max(data_df$x))))
@@ -2392,6 +2747,10 @@ roc_curve_all <- function(objects){
     "#17BACB", "#66c2a5","#A5BE00", "#000000",
     "#a65629")
   
+  colors <- c("#4169E1","#984ea3","#008080",
+              "#FF6347","#FFD700","#D90368")
+  
+  
   #colors <- c(
   #  "#f6bcb7","#d8d082","#88db9c",
   #  "#8cdee0","#b5ccfe","#f6b2f0")
@@ -2400,53 +2759,25 @@ roc_curve_all <- function(objects){
   names(colors) <- names(objects)
   
   for (i in 1:length(objects)){
-    aucs <- sapply(objects[[i]],function(df) df$auc)
-    q1_auc <- quantile(aucs, probs = 0.025)
-    q3_auc <- quantile(aucs, probs = 0.975)
-    
-    differences <- abs(aucs - q1_auc)
-    min_auc <- which.min(differences)
-    
-    differences <- abs(aucs - q3_auc)
-    max_auc <- which.min(differences)
-
-    a <- objects[[i]][[max_auc]]
-    b <- objects[[i]][[min_auc]]
-    
-    ggroc_data_a <- ggroc(a)$data
-    ggroc_data_b <- ggroc(b)$data
-    
-    # Create a common set of x-axis points
-    x_common <- seq(0, 1, length.out = 100)
-    
-    # Interpolate y-values for both lines
-    y1_interp <- approx(ggroc_data_a$`1-specificity`, ggroc_data_a$sensitivity, xout = x_common)$y
-    y2_interp <- approx(ggroc_data_b$`1-specificity`, ggroc_data_b$sensitivity, xout = x_common)$y
-    
-    df <- data.frame(x = x_common, y1 = y1_interp, y2 = y2_interp)
-    
+    auc <- objects[[i]]$auc
+    my_df <- data.frame(sensitivity=objects[[i]]$sensitivities,
+                        `1-specificity`=1-objects[[i]]$specificities,
+                        check.names = FALSE)
+  
       
     my_color <- names(colors)[i]
-    #p <- p + 
-    #geom_line(data=ggroc_data,aes(x=`1-specificity`, y=sensitivity, group=name,
-    #                              color=!!my_color), linewidth=2,alpha=0.7) +
-    #geom_ribbon(data = bounds, aes(x, ymin = ymin, ymax = ymax, fill = fill), alpha = 0.4) 
-    #geom_smooth(data=ggroc_data,aes(x=`1-specificity`, y=sensitivity,color = !!my_color),
-    #            linewidth=1,
-    #            se=FALSE,
-    #            method = 'loess')
     p <- p + 
-    #  geom_line(data=df,aes(x=x,y = y1,color=!!my_color)) +
-    #  geom_line(data=df,aes(x=x,y = y2,color=!!my_color)) +
-      geom_ribbon(data=df,aes(x =x,ymin = pmin(y1, y2), ymax = pmax(y1, y2),fill=!!my_color), alpha = 0.5) +
-      theme_bw() +
-      labs(y = "sensitivity", x = "1-specificity")
+    geom_line(data=my_df,aes(x=`1-specificity`, y=sensitivity, group=name,
+                                  color=!!my_color), linewidth=1.5,alpha=1) 
+
+
   }
   p <- p + theme_minimal() + 
-    scale_color_manual(values = colors) +guides(colour = "none") + 
-    labs(fill = "Model")
+    scale_color_manual(values = colors) + #+ guides(colour = "none") + 
+  theme(legend.title = element_blank())
   return(p)
 }
+
 
 roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
   print(names(objects))
@@ -2468,12 +2799,17 @@ roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
     #colors <- c("#FF7F50","#FFD700","#4169E1","#008080") 
     colors <- c("#008080","#FFD700","#4169E1","#FF7F50")
   }
+  if (grepl("^Q3",Q)) {
+    #\colors <- c("#FF7F50","#FFD700","#4169E1","#008080") 
+    colors <- c("#000000")
+  }
   
   names(colors) <- names(objects)
   
   for (i in 1:length(objects)){
-    load(file.path("../intermediate_files","models",Q,names(objects)[i],paste0(model_name,".RData")))
-    auc_optimism_corrected <- enet_model$model_summary$auc_optimism_corrected
+    loaded_name <- load(file.path("../intermediate_files","models",Q,names(objects)[i],paste0(model_name,".RData")))
+    my_model <- get(loaded_name)
+    auc_optimism_corrected <- my_model$model_summary$auc_optimism_corrected
                   
     aucs <- sapply(objects[[i]],function(df) df$auc)
     q1_auc <- quantile(aucs, probs = 0.025)
@@ -2545,12 +2881,18 @@ roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
       #  geom_line(data=df,aes(x=x,y = y1,color=!!my_color)) +
       geom_ribbon(data=df,aes(x =x,ymin = pmin(y1, y2), ymax = pmax(y1, y2)), fill=my_color, alpha = 0.5,show.legend = TRUE) +
       #geom_line(data=df,aes(x=x, y = y3),color=my_color,size=1.5) +
-      theme_bw() +
+      theme_classic() + 
+      theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
+            axis.title.x = element_text(size=5),
+            axis.text.x = element_text(size=5),
+            axis.title.y = element_text(size=5),
+            axis.text.y = element_text(size=5)) + 
       ylab("Sensitivity") + xlab("1-specificity")
   }
   for (i in 1:length(objects)){
-    load(file.path("../intermediate_files","models",Q,names(objects)[i],paste0(model_name,".RData")))
-    auc_optimism_corrected <- enet_model$model_summary$auc_optimism_corrected
+    loaded_name <- load(file.path("../intermediate_files","models",Q,names(objects)[i],paste0(model_name,".RData")))
+    my_model <- get(loaded_name)
+    auc_optimism_corrected <- my_model$model_summary$auc_optimism_corrected
     
     aucs <- sapply(objects[[i]],function(df) df$auc)
     q1_auc <- quantile(aucs, probs = 0.025)
@@ -2621,8 +2963,13 @@ roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
     p <- p + 
       #  geom_line(data=df,aes(x=x,y = y1,color=!!my_color)) +
       #geom_ribbon(data=df,aes(x =x,ymin = pmin(y1, y2), ymax = pmax(y1, y2)), fill=my_color, alpha = 0.5,show.legend = TRUE) +
-      geom_line(data=df,aes(x=x, y = y3),color=my_color,size=2) +
-      theme_bw() +
+      geom_line(data=df,aes(x=x, y = y3),color=my_color,size=1) +
+      theme_classic() + 
+      theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
+            axis.title.x = element_text(size=5),
+            axis.text.x = element_text(size=5),
+            axis.title.y = element_text(size=5),
+            axis.text.y = element_text(size=5)) + 
       ylab("Sensitivity") + xlab("1-specificity")
   }
   
@@ -2633,10 +2980,15 @@ roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
         value = c(3,1,2),
         color_hex <- colors
       )
-    } else {
+    } else if (TRUE %in% grepl("rPSC",names(objects))){
       legend_data <- data.frame(
         color = gsub("(terminal_ileum)|(colon)|(Genus)|(ASV)","",names(objects)),
         value = c(2,3,4,1),
+        color_hex <- colors)
+    } else{
+      legend_data <- data.frame(
+        color = gsub("(terminal_ileum)|(colon)|(Genus)|(ASV)","",names(objects)),
+        value = c(1),
         color_hex <- colors)
     }
     
@@ -2880,6 +3232,7 @@ cliffs_delta <- function(data,metadata, group){
   
 }
 
+
 basic_univariate_statistics <- function(uni_data, group=NULL){
   asv_table <- uni_data[[1]]
   taxa_table <- uni_data[[2]]
@@ -2943,8 +3296,8 @@ basic_univariate_statistics <- function(uni_data, group=NULL){
   res["Cliffs_delta_ra"] <- cliffs_delta(data_ra,metadata, group) 
   res["LFC_ra"] <- log((res[,paste("MEAN_ra",groups[2])]) / 
                          (res[,paste("MEAN_ra",groups[1])]),2)
-  res[paste("PREVALENCE_",groups[1])] <- (rowSums(group1>0))/(nrow(group1))
-  res[paste("PREVALENCE_",groups[2])] <- (rowSums(group2>0))/(nrow(group2))
+  res[paste("PREVALENCE_",groups[1])] <- (rowSums(group1>0))/(ncol(group1))
+  res[paste("PREVALENCE_",groups[2])] <- (rowSums(group2>0))/(ncol(group2))
   
   # reordering
   res <- res[,c(grep("Q1",colnames(res)),
@@ -3406,11 +3759,18 @@ gbm_binomial <- function(data,
   #n.trees, interaction.depth, shrinkage, n.minobsinnode
   if (all(data[,1] >= 0 & data[,1] <= 1)) ra = TRUE
   else  ra = FALSE
+  
+  if (overfitting_check) {
+    data$Group <- sample(data$Group)
+  }
+  
   if (reuse){
     if (ra) {
-      load(file.path("../intermediate_files/models/",Q,file,"gbm_model_ra.RData"))
+      if (overfitting_check) load(file.path("../intermediate_files/models_overfitting_check/",Q,file,"gbm_model_ra.RData"))
+      else load(file.path("../intermediate_files/models/",Q,file,"gbm_model_ra.RData"))
     } else {
-      load(file.path("../intermediate_files/models/",Q,file,"gbm_model.RData"))
+      if (overfitting_check) load(file.path("../intermediate_files/models_overfitting_check/",Q,file,"gbm_model.RData"))
+      else load(file.path("../intermediate_files/models/",Q,file,"gbm_model.RData"))
     }
   } else {
     set.seed(seed)
@@ -3637,7 +3997,7 @@ gbm_binomial <- function(data,
                     accuracy_optimism_corrected:accuracy_optimism_corrected_CIU)
     
     ## define outputs
-    rf_model <- list(model_summary = model_summary, 
+    gbm_model <- list(model_summary = model_summary, 
                      valid_performances = valid_performances, 
                      predictions = prediction, 
                      rocobj=rocobj,
@@ -3645,14 +4005,21 @@ gbm_binomial <- function(data,
                      trained_model=fit)
     
     # save results
-    if (!dir.exists(file.path("../intermediate_files/models/",Q,file))){
-      dir.create(file.path("../intermediate_files/models/",Q,file))
+    if (overfitting_check){
+      if (!dir.exists(file.path("../intermediate_files/models_overfitting_check/",Q,file))){
+        dir.create(file.path("../intermediate_files/models_overfitting_check/",Q,file))
+      } 
+      if (ra) save(gbm_model,file=file.path("../intermediate_files/models_overfitting_check/",Q,file,"gbm_model_ra.RData"))
+      else save(gbm_model,file=file.path("../intermediate_files/models_overfitting_check/",Q,file,"gbm_model.RData"))
+    } else {
+      if (!dir.exists(file.path("../intermediate_files/models/",Q,file))){
+        dir.create(file.path("../intermediate_files/models/",Q,file))
+      }
+      if (ra) save(gbm_model,file=file.path("../intermediate_files/models/",Q,file,"gbm_model_ra.RData"))
+      else save(gbm_model,file=file.path("../intermediate_files/models/",Q,file,"gbm_model.RData"))
     }
-    
-    if (ra) save(rf_model,file=file.path("../intermediate_files/models/",Q,file,"gbm_model_ra.RData"))
-    else save(rf_model,file=file.path("../intermediate_files/models/",Q,file,"gbm_model.RData"))
   }
-  return(rf_model)
+  return(gbm_model)
 }
 
 knn_binomial <- function(data,
@@ -3669,11 +4036,18 @@ knn_binomial <- function(data,
   
   if (all(data[,1] >= 0 & data[,1] <= 1)) ra = TRUE
   else  ra = FALSE
+  
+  if (overfitting_check) {
+    data$Group <- sample(data$Group)
+  }
+  
   if (reuse){
     if (ra) {
-      load(file.path("../intermediate_files/models/",Q,file,"knn_model_ra.RData"))
+      if (overfitting_check) load(file.path("../intermediate_files/models_overfitting_check/",Q,file,"knn_model_ra.RData"))
+      else load(file.path("../intermediate_files/models/",Q,file,"knn_model_ra.RData"))
     } else {
-      load(file.path("../intermediate_files/models/",Q,file,"knn_model.RData"))
+      if (overfitting_check) load(file.path("../intermediate_files/models_overfitting_check/",Q,file,"knn_model.RData"))
+      else load(file.path("../intermediate_files/models/",Q,file,"knn_model.RData"))
     }
   } else {
     set.seed(seed)
@@ -3878,12 +4252,20 @@ knn_binomial <- function(data,
                        trained_model=fit)
     
     # save results
-    if (!dir.exists(file.path("../intermediate_files/models/",Q,file))){
-      dir.create(file.path("../intermediate_files/models/",Q,file))
+    if (overfitting_check){
+      if (!dir.exists(file.path("../intermediate_files/models_overfitting_check/",Q,file))){
+        dir.create(file.path("../intermediate_files/models_overfitting_check/",Q,file))
+      } 
+      if (ra) save(knn_model,file=file.path("../intermediate_files/models_overfitting_check/",Q,file,"knn_model_ra.RData"))
+      else save(knn_model,file=file.path("../intermediate_files/models_overfitting_check/",Q,file,"knn_model.RData"))
+    } else {
+      if (!dir.exists(file.path("../intermediate_files/models/",Q,file))){
+        dir.create(file.path("../intermediate_files/models/",Q,file))
+      }
+      if (ra) save(knn_model,file=file.path("../intermediate_files/models/",Q,file,"knn_model_ra.RData"))
+      else save(knn_model,file=file.path("../intermediate_files/models/",Q,file,"knn_model.RData"))
     }
     
-    if (ra) save(knn_model,file=file.path("../intermediate_files/models/",Q,file,"knn_model_ra.RData"))
-    else save(knn_model,file=file.path("../intermediate_files/models/",Q,file,"knn_model.RData"))
   }
   
   return(knn_model)
@@ -3906,10 +4288,17 @@ rf_binomial <- function(data,
   # https://topepo.github.io/caret/train-models-by-tag.html#random-forest
   if (all(data[,1] >= 0 & data[,1] <= 1)) ra = TRUE
   else  ra = FALSE
+  
+  if (overfitting_check) {
+    data$Group <- sample(data$Group)
+  }
+  
   if (reuse){
     if (ra) {
+      if (overfitting_check) load(file.path("../intermediate_files/models_overfitting_check/",Q,file,"rf_model_ra.RData"))
       load(file.path("../intermediate_files/models/",Q,file,"rf_model_ra.RData"))
     } else {
+      if (overfitting_check) load(file.path("../intermediate_files/models_overfitting_check/",Q,file,"rf_model.RData"))
       load(file.path("../intermediate_files/models/",Q,file,"rf_model.RData"))
     }
   } else {
@@ -4133,13 +4522,21 @@ rf_binomial <- function(data,
                       trained_model=fit)
     
     # save results
-    if (!dir.exists(file.path("../intermediate_files/models/",Q,file))){
-      dir.create(file.path("../intermediate_files/models/",Q,file))
+    if (overfitting_check){
+     if (!dir.exists(file.path("../intermediate_files/models_overfitting_check/",Q,file))){
+      dir.create(file.path("../intermediate_files/models_overfitting_check/",Q,file))
+     } 
+      if (ra) save(rf_model,file=file.path("../intermediate_files/models_overfitting_check/",Q,file,"rf_model_ra.RData"))
+      else save(rf_model,file=file.path("../intermediate_files/models_overfitting_check/",Q,file,"rf_model.RData"))
+    } else {
+      if (!dir.exists(file.path("../intermediate_files/models/",Q,file))){
+        dir.create(file.path("../intermediate_files/models/",Q,file))
+      }
+      if (ra) save(rf_model,file=file.path("../intermediate_files/models/",Q,file,"rf_model_ra.RData"))
+      else save(rf_model,file=file.path("../intermediate_files/models/",Q,file,"rf_model.RData"))
     }
-    
-    if (ra) save(rf_model,file=file.path("../intermediate_files/models/",Q,file,"rf_model_ra.RData"))
-    else save(rf_model,file=file.path("../intermediate_files/models/",Q,file,"rf_model.RData"))
   }
+  
   return(rf_model)
 }
 
@@ -4254,7 +4651,8 @@ alpha_div_plot <- function(alpha_data){
     # scale_fill_manual(values=c("#f9847c","#1ac6ca")) + 
     # scale_color_manual(values=c("#f9847c","#1ac6ca")) + 
     guides(fill="none",color = "none") + 
-    theme_bw() + 
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
     theme(axis.text.x = element_text(angle = 45, hjust = 1))+ 
     facet_wrap(~factor(variable,levels=c("Observe","Shannon","Simpson","Pielou")), ncol = 4,scales = "free")  + 
     
@@ -4301,7 +4699,8 @@ beta_div_plot <- function(ps,metadata,rarefy=TRUE,normalize=FALSE,filter=FALSE,m
     geom_point(show.legend = TRUE,size=3) + stat_ellipse(show.legend = FALSE) + 
     xlab(lab1)+
     ylab(lab2)+
-    theme_bw() + 
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
     theme(legend.position = "right") + 
     scale_color_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) +
     scale_fill_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) 
@@ -4313,7 +4712,8 @@ beta_div_plot <- function(ps,metadata,rarefy=TRUE,normalize=FALSE,filter=FALSE,m
     geom_point(show.legend = TRUE, size=3) + stat_ellipse(show.legend = FALSE) + 
     xlab(lab1)+
     ylab(lab3)+
-    theme_bw() + 
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) +  
     theme(legend.position = "right") + 
     #  scale_fill_manual(values=c("#f9847c","#1ac6ca")) + 
     #   scale_color_manual(values=c("#f9847c","#1ac6ca")) 
@@ -4325,7 +4725,8 @@ beta_div_plot <- function(ps,metadata,rarefy=TRUE,normalize=FALSE,filter=FALSE,m
     geom_point(show.legend = TRUE,size=3) + stat_ellipse(show.legend = FALSE) + 
     xlab(lab2)+
     ylab(lab3)+
-    theme_bw() + 
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
     theme(legend.position = "right") + 
     # scale_fill_manual(values=c("#f9847c","#1ac6ca")) + 
     #   scale_color_manual(values=c("#f9847c","#1ac6ca")) 
@@ -4402,7 +4803,8 @@ composition <- function(ps, rarefy=FALSE, legend=FALSE,
   p <- plot_bar(ps, fill = "Phylum") +
     geom_bar(aes(color=Phylum, 
                  fill=Phylum), stat="identity", position="stack") + 
-    theme_bw() + 
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
     scale_x_discrete(guide = guide_axis(angle = 90)) + 
     scale_color_manual(breaks=c("Actidobacteriota","Actinobacteriota","Bacteroidota","Bdellovibionota","Campilobacterota","Chloroflexi","Cyanobacteria","Deinococcota","Dependentiae","Desulfobacterota","Elusimicrobiota","Euryarcheota","Firmicutes","Fusobacteriota","Myxzcoccota","NB1-j","Patescibacteria","Planctomycetota","Proteobacteria","RCP2-54","Spirochaetota","Synergistota","Thermoplasmatota","unassigned","Verrucomicrobiota","WPS-2"),
                        values=c("#1f1f1f","#546494","#388842","#8350b6","#d62e5f","#381216","#6e94c8","#aeae43","#9d729f","#ba3237","#723f23","#4f9eba","#b3dd9c","#e18dac","#ae4a37","#dbad80","#8ebcca","#e7d836","#e7928f","#dc6438","#d7c2a3","#e9e07f","#d1a9b0","#e8b14f","#309f87","#425387","#f9c675","#d55c4a"))+
@@ -4455,7 +4857,8 @@ mock_zymo_genus_plot <- function(mock_zymo_genus, metadata, setting){
     geom_bar(data=mock_zymo_genus_melted, aes(y=`Relative abundance`, x=Sample, fill=SeqID),position="fill", stat="identity") + 
     geom_text(size=2,aes(label = labels,x = 1:length(labels),y=rep(1.07,length(labels)))) + 
     scale_y_continuous(limits = c(-0.2,1.1),breaks=seq(0,1,by=0.2)) + 
-    theme_bw() +
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
     theme(legend.position = "right",axis.text.x = element_blank(),
           legend.text=element_text(size=10),
           legend.title = element_text(size=15),  
@@ -4474,7 +4877,8 @@ mock_zymo_genus_plot <- function(mock_zymo_genus, metadata, setting){
     geom_bar(data=mock_zymo_genus_melted_samples, aes(y=`Relative abundance`, x=Sample, fill=SeqID),position="fill", stat="identity") + 
     geom_text(size=2,aes(label = labels_samples,x = 1:length(labels_samples),y=rep(1.07,length(labels_samples)))) + 
     scale_y_continuous(limits = c(0,1.1),breaks=seq(0,1,by=0.2)) + 
-    theme_bw() +
+    theme_classic() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
     theme(legend.position = "right",axis.text.x = element_blank(),
           legend.text=element_text(size=10),
           legend.title = element_text(size=15),  
