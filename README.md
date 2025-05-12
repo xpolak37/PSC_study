@@ -63,11 +63,11 @@ This project analyses biopsy samples from two cohorts (Czech and Norwegian), nam
 
 > TO BE ADDED
 
-[Q1_analysis]
-[Q2_analysis]
-[Q3_analysis]
-[clinical_analysis](https://xpolak37.github.io/PSC_study/analysis/scripts/psc_study_clinical.html)
-[ML_overfitting_check]
+- [Q1_analysis](https://xpolak37.github.io/PSC_study/analysis/scripts/psc_study_q1.html)
+- [Q2_analysis](https://xpolak37.github.io/PSC_study/analysis/scripts/psc_study_q2.html)
+- [Q3_analysis](https://xpolak37.github.io/PSC_study/analysis/scripts/psc_study_q3.html)
+- [clinical_analysis](https://xpolak37.github.io/PSC_study/analysis/scripts/psc_study_clinical.html)
+- [ML_overfitting_check](https://xpolak37.github.io/PSC_study/analysis/scripts/psc_study_ml_overfitting_check.html)
 
 ---------------------------------------------------------------------------------------------------
 
