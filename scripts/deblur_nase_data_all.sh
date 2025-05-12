@@ -208,15 +208,15 @@ qiime tools export \
 --output-path vysledky
 
 
-#qiime picrust2 full-pipeline \
-#   --i-table ASV_abundance_filtered.qza \
-#   --i-seq ASV_seqs_merged.qza \
-#   --output-dir picrust \
-#   --p-placement-tool sepp \
-#   --p-threads 10 \
-#   --p-hsp-method pic \
-#   --p-max-nsti 2 \
-#   --verbose
+qiime picrust2 full-pipeline \
+   --i-table ASV_abundance_filtered.qza \
+   --i-seq ASV_seqs_merged.qza \
+   --output-dir picrust \
+   --p-placement-tool sepp \
+   --p-threads 10 \
+   --p-hsp-method pic \
+   --p-max-nsti 2 \
+   --verbose
 
 #cd picrust
 

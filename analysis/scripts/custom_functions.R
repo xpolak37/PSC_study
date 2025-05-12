@@ -1,5 +1,8 @@
 suppressMessages(suppressWarnings({
   library(data.table)
+  library(ccrepe)
+  library(igraph)
+  library(readr)
   library(cowplot)
   library(dplyr)
   library(tibble)
@@ -7,10 +10,9 @@ suppressMessages(suppressWarnings({
   library(phyloseq)
   library(MicrobiotaProcess)
   library(ggpubr)
-  library(ALDEx2)
   library(ggrepel)
   library(ggplotify)
-  library(radEmu)
+  #library(radEmu)
   library(vegan)
   library(reshape2)
   library(pheatmap)
@@ -25,18 +27,24 @@ suppressMessages(suppressWarnings({
   library(glmnet)
   library(pROC)
   library(purrr)
-  library(umap)
+  #library(umap)
   library(Maaslin2)
   library(ggvenn)
   library(ranger)
   library(doParallel)
   library(gbm)
   library(tidyr)
+  library(kableExtra)
+  library(tidyverse)
+  library(picante)
+  library(tidyr)
+  library(mice)
 }))
+
 ## Basic functions for data processing ----
 
 read_counts <- function(asv_table, text=FALSE, line=5000){
-  # This function creates a plot of library size - read count per sample
+  # Creates a plot of library size - read count per sample
   # inputs:
   # asv_table - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
   # outputs:
@@ -72,6 +80,13 @@ read_counts <- function(asv_table, text=FALSE, line=5000){
 }
 
 data_check <- function(asv_table,taxa_table){
+  # Checks the data from redundant taxa
+  # inputs:
+  # asv_table - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # taxa_table - Taxonomy with 'SeqID' and taxonomy
+  # outputs:
+  # list(asv_table, taxa_table) - non-redundant tables
+  
   # NaN to 0 and unassigned
   asv_table[is.na(asv_table)] <- 0
   taxa_table[is.na(taxa_table)] <- "unassigned"
@@ -98,10 +113,21 @@ data_check <- function(asv_table,taxa_table){
   return(list(asv_table,taxa_table))
 }
 
+
 merging_data <- function(asv_tab_1, asv_tab_2,
                         taxa_tab_1,taxa_tab_2,
                         metadata_1,metadata_2,
                         segment, Q){
+  
+  # Creates the dataset by merging two cohorts by specific segment
+  # inputs:
+  # asv_tab_1/2 - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # taxa_tab_1/2 - Taxonomy with 'SeqID' and taxonomy
+  # metadata_1/2 - metadata with 'SampleID' identifier
+  # segment - terminal_ileum/colon
+  # Q - analysis question (Q1/Q2/Q3)
+  # outputs:
+  # list(asv_table, taxa_table, metadata) - newly created dataset
   
   if ("segment" %in% colnames(metadata_1)){
     metadata_1 <- metadata_1 %>% dplyr::rename(Matrix=segment)
@@ -133,9 +159,17 @@ merging_data <- function(asv_tab_1, asv_tab_2,
     merged_taxa_tab <- merging_taxa_tables(taxa_tab_1,taxa_tab_2)
     
     # metadata merge
-    merged_metadata <- rbind(metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country),
-                             metadata_2 %>% dplyr::select(SampleID,subjectid,Group,segment,Country) %>% dplyr::rename(Patient=subjectid,Matrix=segment) %>%
-                               mutate(Patient=paste0("NO_",Patient)))
+    if (Q=="Q5"){
+     merged_metadata <- rbind(metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country, Calprotectin),
+                             metadata_2 %>% dplyr::select(SampleID,subjectid,Group,segment,Country, Calprotectin) %>% 
+                               dplyr::rename(Patient=subjectid,Matrix=segment) %>%
+                               mutate(Patient=paste0("NO_",Patient))) 
+    } else{
+      merged_metadata <- rbind(metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country),
+                               metadata_2 %>% dplyr::select(SampleID,subjectid,Group,segment,Country) %>% dplyr::rename(Patient=subjectid,Matrix=segment) %>%
+                                 mutate(Patient=paste0("NO_",Patient))) 
+    }
+    
     row.names(merged_metadata) <- NULL
     
   } else {
@@ -145,12 +179,19 @@ merging_data <- function(asv_tab_1, asv_tab_2,
     
     # metadata merge
     if ("Patient" %in% colnames(metadata_1)){
-      merged_metadata <- metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country)
+      if (Q=="Q5")  merged_metadata <- metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country, Calprotectin)
+      else merged_metadata <- metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country)
     } else {
-      merged_metadata <- metadata_1 %>% 
-        dplyr::select(SampleID,subjectid,Group,Matrix,Country) %>% 
+      if (Q=="Q5") {merged_metadata <- metadata_1 %>% 
+        dplyr::select(SampleID,subjectid,Group,Matrix,Country, Calprotectin) %>% 
         dplyr::rename(Patient=subjectid) %>%
-        mutate(Patient=paste0("NO_",Patient))
+        mutate(Patient=paste0("NO_",Patient))}
+      else {
+        merged_metadata <- metadata_1 %>% 
+          dplyr::select(SampleID,subjectid,Group,Matrix,Country) %>% 
+          dplyr::rename(Patient=subjectid) %>%
+          mutate(Patient=paste0("NO_",Patient))
+      }
     }
     row.names(merged_metadata) <- NULL
   }
@@ -170,7 +211,7 @@ merging_data <- function(asv_tab_1, asv_tab_2,
     # keep only rPSC vs non-rPSC vs Healthy
     merged_metadata <- merged_metadata[merged_metadata$Group %in% c("rPSC","non-rPSC","healthy"),]
   } else if (Q=="Q3"){
-    merged_metadata <- merged_metadata[merged_metadata$Group %in% c("rPSC","pre_ltx"),]
+    merged_metadata <- merged_metadata[merged_metadata$Group %in% c("rPSC","non-rPSC", "pre_ltx"),]
     merged_metadata$Group <- "PSC"
   }
   merged_asv_tab <- merged_asv_tab[,c(TRUE,colnames(merged_asv_tab)[-1] %in% merged_metadata$SampleID)]
@@ -186,6 +227,16 @@ merging_data <- function(asv_tab_1, asv_tab_2,
 
 
 merging_taxa_tables <- function(taxa_table,new_taxa_table){
+  # Creates the dataset by merging two cohorts by specific segment
+  # inputs:
+  # asv_tab_1/2 - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # taxa_tab_1/2 - Taxonomy with 'SeqID' and taxonomy
+  # metadata_1/2 - metadata with 'SampleID' identifier
+  # segment - terminal_ileum/colon
+  # Q - analysis question (Q1/Q2/Q3)
+  # outputs:
+  # list(asv_table, taxa_table, metadata) - newly created dataset
+  
   message(("Merging at ASV level"))
   taxa_inconsistent <- merge(taxa_table,new_taxa_table, 
                              by=c("SeqID"), all=TRUE)
@@ -294,33 +345,6 @@ aggregate_taxa <- function(asv_table,taxa_table,taxonomic_level,names=TRUE){
   return(list(asv_table_sub,taxa_table_sub))
 }
 
-aggregate_samples <- function(asv_table,taxa_table,metadata,variable){
-  # This function aggregates abundances at different taxonomic levels.
-  # It is used in every function with parameter 'taxonomic_level', where
-  # various taxonomic levels can be considered.
-  # inputs:
-  # asv_table - ASV table with 'SeqID'
-  # taxa_table - Taxonomy with 'SeqID' and taxonomy
-  # taxonomic_level - aggregate to which level
-  # names=TRUE - boolean indicating if 'SeqID' should be returned, several functions
-  # do not require the IDs, so this column can be discarded
-  # outputs:
-  # list with new asv table and taxa table
-  # available taxa ranks
-
-  # merge asv and taxa table, this table is than used for aggregating
-  group_asv_table <- data.frame(SeqID=taxa_table$SeqID)
-  unique_values_variable <- unique(metadata[,variable])
-  for (value in unique_values_variable){
-      samples <- metadata$SampleID[metadata[,variable]==value]
-      group_sums <- rowSums(asv_table[,samples])
-      group_asv_table[,value] <- group_sums
-  }
-  
-  return(group_asv_table)
-}
-
-
 construct_phyloseq <- function(asv_table, taxa_table, metadata){
   # This function constructs phyloseq object and is mainly used in functions
   # with methods that require phyloseq object 
@@ -365,18 +389,31 @@ construct_phyloseq <- function(asv_table, taxa_table, metadata){
 }
 
 create_asv_taxa_table <- function(asv_table, taxa_table){
+  # Creates the dataset by merging two cohorts by specific segment
+  # inputs:
+  # asv_table - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # taxa_table - Taxonomy with 'SeqID' and taxonomy
+  # outputs:
+  # taxa_asv_table - data frame with counts and taxonomy
+  
   # creating asv+taxa
   asvs <- asv_table$SeqID
   taxa_ranks <- colnames(taxa_table)
   where_level <- which(tolower(taxa_ranks)=="species")
   if (length(where_level)==0) where_level <- which(tolower(taxa_ranks)=="genus")
   if (length(where_level)==0) where_level <- which(tolower(taxa_ranks)=="phylum")
+  if (length(where_level)==0) where_level <- which(tolower(taxa_ranks)=="domain")
   taxa_asv_table <- merge(taxa_table,asv_table, by="SeqID", all=TRUE) 
   
-  seq_ids <- apply(taxa_asv_table[,2:where_level],1, function(x){
+  if (where_level!=2){
+    seq_ids <- apply(taxa_asv_table[,2:where_level],1, function(x){
     a <- paste0(substring(tolower(colnames(taxa_asv_table[,2:where_level])),1,1),"__",x, collapse = ";")
     return(a)
   })
+  } else {
+    seq_ids <- paste0("gu__",taxa_asv_table[,2])
+  }
+  
   
   taxa_asv_table$Taxonomy <- seq_ids
   taxa_asv_table %<>% column_to_rownames("SeqID")
@@ -387,8 +424,20 @@ create_asv_taxa_table <- function(asv_table, taxa_table){
   return(taxa_asv_table)
 }
 
+
 binomial_prep <- function(asv_table,taxa_table,metadata,group, patient=FALSE,
-                          usage="linDA"){
+                          usage="linDA",filtering=TRUE){
+  # Prepares the dataset for univariate analysis or machine learning functions
+  # inputs:
+  # asv_table - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # taxa_table - Taxonomy with 'SeqID' and taxonomy
+  # metadata - data frame with 'SampleID' identifier
+  # group - what groups will be tested, e.g. (c(healthy,pre_LTx))
+  # patient - boolean, should info about patient be incorporated?
+  # usage - linDA/ml_clr/ml_ra 
+  # outputs:
+  # list(uni_data,uni_tax,uni_metadata) or 
+  # uni_data
   
   # prepare the data
   uni_data <- asv_table %>% column_to_rownames("SeqID")
@@ -403,13 +452,21 @@ binomial_prep <- function(asv_table,taxa_table,metadata,group, patient=FALSE,
   uni_tax <- data_checked[[2]]
   uni_metadata <- metadata[colnames(uni_data),]
   
-  filt_data <- filtering_steps(uni_data %>% rownames_to_column("SeqID"),uni_tax,
+  if (filtering){
+    filt_data <- filtering_steps(uni_data %>% rownames_to_column("SeqID"),uni_tax,
                                uni_metadata %>% rownames_to_column("SampleID"),
                                seq_depth_threshold=10000)
-  
   uni_data <- filt_data[[1]]  %>% column_to_rownames("SeqID")
   uni_tax <- filt_data[[2]]
   uni_metadata <- filt_data[[3]] %>% column_to_rownames("SampleID")
+  }  else{
+    data_filt <- seq_depth_filtering(uni_data %>% rownames_to_column("SeqID"),uni_tax,
+                                     uni_metadata %>% rownames_to_column("SampleID"),
+                                     seq_depth_threshold=10000)
+    uni_data <- data_filt[[1]]  %>% column_to_rownames("SeqID")
+    uni_tax <- data_filt[[2]]
+    uni_metadata <- data_filt[[3]] %>% column_to_rownames("SampleID")
+  }
   
   if (grepl("ml_",usage)){
     if (usage=="ml_clr"){
@@ -436,6 +493,8 @@ binomial_prep <- function(asv_table,taxa_table,metadata,group, patient=FALSE,
 
 binomial_prep_psc_effect <- function(asv_table,taxa_table,metadata,df_effect, patient=FALSE,
                           usage="linDA"){
+  # This functions is similar to binomial_prep(), 
+  # but works for the PSC effect data preparation
   
   if (TRUE %in% grepl("rPSC",unique(metadata$Group))){
     group <- c("rPSC","non-rPSC")
@@ -499,331 +558,27 @@ binomial_prep_psc_effect <- function(asv_table,taxa_table,metadata,df_effect, pa
   
 }
 
-univariate_statistics <- function(list_intersections,psc_effect,
-                                  genus_asv_taxa_tab,segment="terminal_ileum"){
-  univar_df <- data.frame()
-  wb = createWorkbook()
-  
-  # group1 vs group2
-  groups_names <- c()
-  for (name in (grep(paste(segment,"ASV"),names(list_intersections),value=TRUE))){
-    groups_names <- c(groups_names,gsub("_ltx","",gsub("healthy","H",gsub(segment,"",gsub(" ASV","", name)))))
-    ASV_df <- list_intersections[[name]]
-    genus_df <- list_intersections[[gsub("ASV","Genus",name)]]
-    
-    ASV <- ASV_df$Taxonomy
-    ASV <- substring(ASV, 1, nchar(ASV)-14)
-    
-    genus <- genus_df$ASV
-    genus <- genus_asv_taxa_tab[genus,"SeqID"]
-    
-    ASVs_in_genera <- ASV %in% genus
-    ASVs_in_genera <- ASV_df[ASVs_in_genera,]
-    
-    unique_ASVs_in_genera <- unique(ASVs_in_genera$Taxonomy)
-    unique_ASVs_in_genera <- genus_asv_taxa_tab[unique_ASVs_in_genera,"SeqID"]
-    
-    ASVs_not_in_genera <- !(ASV %in% genus)
-    ASVs_not_in_genera <- ASV_df[ASVs_not_in_genera,]
-    
-    genera_in_ASVs <- genus %in% unique(ASV)
-    genera_in_ASVs <- genus_df[genera_in_ASVs,]
-    
-    genera_not_in_ASVs <- !(genus %in% unique(ASV))
-    genera_not_in_ASVs <- genus_df[genera_not_in_ASVs,]
-    
-    univar_df <- rbind(univar_df,t(data.frame(
-      c(length(ASV),
-        length(unique(ASV)), 
-        length(genus)
-        #nrow(ASVs_in_genera),
-        #nrow(ASVs_not_in_genera),
-        #length(unique_ASVs_in_genera),
-        #nrow(genera_in_ASVs),
-        #nrow(genera_not_in_ASVs)
-        ))))
-    
-    new_name <- groups_names[length(groups_names)]
-    addWorksheet(wb, sheetName = paste(new_name,"ASVs"))
-    writeData(wb, sheet = paste(new_name,"ASVs"), ASV_df, rowNames=FALSE)
-    
-    addWorksheet(wb, sheetName = paste(new_name,"Genera"))
-    writeData(wb, sheet = paste(new_name,"Genera"), genus_df, rowNames=FALSE)
-    
-    #addWorksheet(wb, sheetName = paste(new_name,"ASVs in G"))
-    #writeData(wb, sheet = paste(new_name,"ASVs in G"), ASVs_in_genera, rowNames=FALSE)
-    
-    #addWorksheet(wb, sheetName = paste(new_name,"ASVs !in G"))
-    #writeData(wb, sheet = paste(new_name,"ASVs !in G"), ASVs_not_in_genera, rowNames=FALSE)
-    
-    #addWorksheet(wb, sheetName = paste(new_name,"AUG in ASVs"))
-    #writeData(wb, sheet = paste(new_name,"AUG in ASVs"), unique_ASVs_in_genera, rowNames=FALSE)
-    
-    #addWorksheet(wb, sheetName = paste(new_name,"G in ASVs"))
-    #writeData(wb, sheet = paste(new_name,"G in ASVs"), genera_in_ASVs, rowNames=FALSE)
-    
-    #addWorksheet(wb, sheetName = paste(new_name,"G !in ASVs"))
-    #writeData(wb, sheet = paste(new_name,"G !in ASVs"), genera_in_ASVs, rowNames=FALSE)
-    }
-  
-  # PSC effect/rPSC effect
-  groups_names <- c(groups_names,"PSC effect")
-  ASV_df <- psc_effect[[paste(segment,"ASV")]]
-  genus_df <- psc_effect[[paste(segment,"Genus")]]
-  
-  ASV <- ASV_df$Taxonomy
-  ASV <- substring(ASV, 1, nchar(ASV)-14)
-  
-  genus <- genus_df$ASV
-  genus <- ileum_genus_asv_taxa_tab[genus,"SeqID"]
-  
-  ASVs_in_genera <- ASV %in% genus
-  ASVs_in_genera <- ASV_df[ASVs_in_genera,]
-  
-  unique_ASVs_in_genera <- unique(ASVs_in_genera$Taxonomy)
-    
-  ASVs_not_in_genera <- !(ASV %in% genus)
-  ASVs_not_in_genera <- ASV_df[ASVs_not_in_genera,]
-  
-  genera_in_ASVs <- genus %in% unique(ASV)
-  genera_in_ASVs <- genus_df[genera_in_ASVs,]
-  
-  genera_not_in_ASVs <- !(genus %in% unique(ASV))
-  genera_not_in_ASVs <- genus_df[genera_not_in_ASVs,]
-  
-  univar_df <- rbind(univar_df,t(data.frame(
-    c(length(ASV),
-      length(unique(ASV)), 
-      length(genus)
-      #nrow(ASVs_in_genera),
-      #nrow(ASVs_not_in_genera),
-      #length(unique_ASVs_in_genera),
-      #nrow(genera_in_ASVs),
-      #nrow(genera_not_in_ASVs)
-    ))))
-  
-  rownames(univar_df) <-groups_names
-  colnames(univar_df) <- c("ASVs","Unique genera", "Genera")#, 
-                           #"ASVs in genera", "ASVs NOT in genera", "Unique ASVs in genera",
-                           #"Genera in ASVs",  "Genera NOT in ASVs")
-  
-  new_name <- groups_names[length(groups_names)]
-  addWorksheet(wb, sheetName = paste(new_name,"ASVs"))
-  writeData(wb, sheet = paste(new_name,"ASVs"), ASV_df, rowNames=FALSE)
-  
-  addWorksheet(wb, sheetName = paste(new_name,"Genera"))
-  writeData(wb, sheet = paste(new_name,"Genera"), genus_df, rowNames=FALSE)
-  
-  #addWorksheet(wb, sheetName = paste(new_name,"ASVs in G"))
-  #writeData(wb, sheet = paste(new_name,"ASVs in G"), ASVs_in_genera, rowNames=FALSE)
-  
-  #addWorksheet(wb, sheetName = paste(new_name,"ASVs !in G"))
-  #writeData(wb, sheet = paste(new_name,"ASVs !in G"), ASVs_not_in_genera, rowNames=FALSE)
-  
-  #addWorksheet(wb, sheetName = paste(new_name,"AUG in ASVs"))
-  #writeData(wb, sheet = paste(new_name,"AUG in ASVs"), unique_ASVs_in_genera, rowNames=FALSE)
-  
-  #addWorksheet(wb, sheetName = paste(new_name,"G in ASVs"))
-  #writeData(wb, sheet = paste(new_name,"G in ASVs"), genera_in_ASVs, rowNames=FALSE)
-  
-  #addWorksheet(wb, sheetName = paste(new_name,"G !in ASVs"))
-  #writeData(wb, sheet = paste(new_name,"G !in ASVs"), genera_in_ASVs, rowNames=FALSE)
-  
-  return(list(univar_df, wb))
-}
-
-mock_zymo_genus_merging <- function(asv_table,taxa_table,zymo_asv_table, zymo_taxa){
-  # merging mock community samples with reference abundance
-  taxa_table[is.na(taxa_table)] <- "unassigned"
-  asv_table[is.na(asv_table)] <- 0
-  taxa_reads_table <- create_asv_taxa_table(asv_table,taxa_table)
-  genus_data <- aggregate_taxa(asv_table,taxa_table, taxonomic_level = "Genus")
-  genus_asv_table <- genus_data[[1]]
-  genus_taxa_table <- genus_data[[2]]
-  
-  genus_asv_table_norm <- as.data.frame(apply(genus_asv_table[,-1],2,function(x) x/sum(x)))
-  genus_asv_table_norm$SeqID <- genus_asv_table$SeqID
-  
-  colnames(zymo_asv_table)[1] <- "SeqID"
-  colnames(zymo_taxa)[1] <- "SeqID"
-  
-  genus_data_zymo <- aggregate_taxa(zymo_asv_table,zymo_taxa, taxonomic_level = "Genus")
-  genus_zymo_asv_table <- genus_data_zymo[[1]][-9,]
-  genus_zymo_taxa_table <- genus_data_zymo[[2]][-9,]
-  
-  merged_data <- merge(genus_zymo_asv_table,genus_asv_table_norm, by="SeqID", all=TRUE)
-  merged_data[is.na(merged_data)] <- 0
-  colnames(merged_data)[2] <- "ZYMO REFERENCE"
-  return(merged_data)
-}
-
-group_intersection <- function(group, list_intersections, list_venns,
-                                 linda.output1, fit_data,
-                                 raw_linda_results, segment,level){
-  
-  list_core <- list()
-  linda_df <- linda.output1[[paste0(group[1]," vs Group",group[2])]]
-  list_core[["linDA"]] <- rownames(linda_df[linda_df$padj <= 0.05,])
-  
-  maaslin_df <- fit_data$results[fit_data$results$metadata=="Group",]
-  list_core[["MaAsLin2"]] <- maaslin_df[maaslin_df$qval <= 0.05,"feature"]
-  
-  diff <- intersect(list_core[[1]],list_core[[2]])
-  orig <- raw_linda_results[[segment]][[paste0(group[1]," vs Group",group[2])]]
-  diff <- orig[orig$SeqID %in% diff,]
-  
-  #if (segment == "terminal_ileum") segment <- "Ileum"
-  list_intersections[[paste(segment,level,paste(group, collapse = " vs "))]] <- diff
-  
-  # venn diagram
-  venn <- ggvenn(list_core, fill_color = c("blue", "red")) + 
-    ggtitle(paste(segment,level,paste(group, collapse = " vs "))) + 
-    guides(fill = "none")
-  
-  # save the results
-  list_venns[[paste(segment,level,paste(group, collapse = " vs "))]] <- venn
-  
-  # show the results
-  return(list(list_intersections,list_venns,venn))
-}
-
-country_union <- function(group,linda.output1, fit_data, segment, level){
-  list_core <- list()
-  linda_df <- linda.output1[[paste(group[1],",",group[2],"- CZ vs NO")]]
-  list_core[["linDA"]] <- rownames(linda_df[linda_df$padj <= 0.05,])
-  
-  maaslin_df <- fit_data$results[fit_data$results$metadata=="Group",]
-  list_core[["MaAsLin2"]] <- maaslin_df[maaslin_df$qval <= 0.05,"feature"]
-  
-  union <- c(list_core[[1]],list_core[[2]])
-  union <- union[!duplicated(union)]
-  
-  #if (segment == "terminal_ileum") segment <- "Ileum"
-  # save the results
-  list_country_union[[paste(segment,level,paste(group, collapse = " vs "))]] <- union
-  return(list_country_union)
-}
-
-country_interaction <- function(group,linda.output1,list_intersections, 
-                                uni_data, uni_metadata,
-                                segment, level){
-  interaction_significant_df <- linda.output1[[paste0(group[1]," vs Group",group[2],":CountryNO")]]
-  interaction_significant_df <- interaction_significant_df[interaction_significant_df$padj<0.05,]
-  
-  group_significant_df <- list_intersections[[paste(segment,level, group[1],"vs",group[2])]]
-  
-  intersection_significant <- intersect(rownames(interaction_significant_df),group_significant_df$ASV)
-  
-  linda_czech_interaction_significant <- NA
-  linda_no_interaction_significant <- NA
-  
-  if (length(intersection_significant)>0){
-    # Subset the data by country
-    uni_metadata_czech <- subset(uni_metadata, Country == "CZ")
-    uni_metadata_no <- subset(uni_metadata, Country == "NO")
-    
-    uni_data_czech <- uni_data[,rownames(uni_metadata_czech)]
-    uni_data_no <- uni_data[,rownames(uni_metadata_no)]
-    
-    # Run linDA for each subset
-    if (segment=="terminal_ileum"){
-      linda_czech <- linda(uni_data_czech , uni_metadata_czech, formula = '~ Group')
-      linda_no <- linda(uni_data_no, uni_metadata_no, formula = '~ Group')
-    } else if (segment=="colon"){
-      linda_czech <- linda(uni_data_czech , uni_metadata_czech, formula = '~ Group + (1|Patient)')
-      linda_no <- linda(uni_data_no, uni_metadata_no, formula = '~ Group + (1|Patient)')
-      
-    } else cat("Problem with segment!\n")
-    
-    linda_czech_interaction_significant <- linda_czech$output[[1]][intersection_significant,]
-    linda_no_interaction_significant <- linda_no$output[[1]][intersection_significant,]
-  }
-  
-  return(list(intersection_significant,linda_czech_interaction_significant,linda_no_interaction_significant))
-}
-
-removing_interaction_problems <- function(group,
-                                          list_interaction_significant,
-                                          list_intersections,
-                                          segment, level){
-  
-  to_investigate <- list_interaction_significant[[1]]
-  to_remove <- c()
-  
-  if (length(to_investigate)>0){
-    for (taxon in to_investigate){
-      cz <- list_interaction_significant[[2]][taxon,c("log2FoldChange","reject")]
-      no <- list_interaction_significant[[3]][taxon,c("log2FoldChange","reject")]
-      if (! (((cz[,1]>0)==(no[,1]>0)) & cz[,2] & no[,2]) ) to_remove <- c(to_remove,taxon)
-    }
-    
-    if (length(to_remove)>0){
-      df_to_change <- list_intersections[[paste(segment,level, group[1],"vs",group[2])]]
-      df_to_change <- df_to_change[!(rownames(df_to_change)%in%to_remove),]
-      list_intersections[[paste(segment,level, group[1],"vs",group[2])]] <- df_to_change
-    }
-    
-    list_intersections <- lapply(list_intersections, function (x) remove_rownames(x))
-  }
-  rownames(list_intersections) <- NULL
-  return(list_intersections)
-}
-
-dysbiosis_index_calculation <- function(my_table, metadata_table, 
-                                        psc_increased,
-                                        psc_decreased,
-                                        name){
-  my_table <- my_table %>% column_to_rownames("SeqID")
-  
-  dysbiosis_data <- data.frame()
-  for (i in 1:ncol(my_table)){
-    SampleID <- colnames(my_table)[i]
-    PatientID <- metadata_table[metadata_table$SampleID==SampleID,"Patient"]
-    abundances <- my_table[,i]/sum(my_table[,i])
-    names(abundances) <- rownames(my_table)
-    abundances_psc_increased <- sum(abundances[psc_increased])
-    abundances_psc_decreased <- sum(abundances[psc_decreased])
-    
-    # !!!!!!!!!!! PSEUDOCOUNT - prediskutovat
-    if (abundances_psc_increased==0) abundances_psc_increased <- 1e-20
-    if (abundances_psc_decreased==0) abundances_psc_decreased <- 1e-20
-    dys_index <- log(abundances_psc_increased/abundances_psc_decreased)
-    dysbiosis_data <- rbind(dysbiosis_data,data.frame(SampleID,PatientID,dys_index))
-  }
-  colnames(dysbiosis_data) <- c("SampleID","PatientID",name)
-  return(dysbiosis_data)
-}
-
-dysbiosis_index_calculation_clr <- function(my_table, metadata_table, 
-                                        psc_increased,
-                                        psc_decreased,
-                                        name){
-  my_table <- my_table %>% column_to_rownames("SeqID")
-  data_clr <- vegan::decostand(my_table,method = "clr", MARGIN = 2,pseudocount=0.5) %>% as.matrix()
-  
-  dysbiosis_data <- data.frame()
-  for (i in 1:ncol(my_table)){
-    SampleID <- colnames(my_table)[i]
-    PatientID <- metadata_table[metadata_table$SampleID==SampleID,"Patient"]
-    abundances <- data_clr[,i]
-    names(abundances) <- rownames(my_table)
-    abundances_psc_increased <- sum(abundances[psc_increased])
-    abundances_psc_decreased <- sum(abundances[psc_decreased])
-    
-    dys_index <- abundances_psc_increased - abundances_psc_decreased
-    dysbiosis_data <- rbind(dysbiosis_data,data.frame(SampleID,PatientID,dys_index))
-  }
-  colnames(dysbiosis_data) <- c("SampleID","PatientID",name)
-  return(dysbiosis_data)
-}
 
 ## Filtering functions ----
 
 filtering_steps <- function(asv_tab,taxa_tab,metadata,
                             seq_depth_threshold=10000){
+  
+  # Filters the dataset by predefined rules 
+  # (sequencing_depth, nearzerovar()) and checks the low depth of samples
+  # afterwards
+  # inputs:
+  # asv_tab - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # taxa_tab - Taxonomy with 'SeqID' and taxonomy
+  # metadata -  metadata with 'SampleID' identifier
+  # seq_depth_threshold - threshold for sequencing depth filtering, default 10,000
+  # outputs:
+  # list(filt_asv_tab,filt_taxa_tab, filt_metadata)
+  
   # filtering
-  ## sequencing depth 10 000
-  data_filt <- seq_depth_filtering(asv_tab,taxa_tab,metadata)
+  ## sequencing depth
+  data_filt <- seq_depth_filtering(asv_tab,taxa_tab,metadata,
+                                   seq_depth_threshold = seq_depth_threshold)
   filt_asv_tab <- data_filt[[1]]
   filt_taxa_tab <- data_filt[[2]]
   filt_metadata <- data_filt[[3]]
@@ -839,7 +594,6 @@ filtering_steps <- function(asv_tab,taxa_tab,metadata,
   
   # Zerodepth
   # filter the samples with remaining counts smaller than 100
-  #colnames(filt_asv_tab[,-1])[colSums(filt_asv_tab[,-1])<100]
   if (TRUE %in% (colSums(filt_asv_tab[,-1])<100)){
     where <- grep(colnames(filt_asv_tab[,-1])[colSums(filt_asv_tab[,-1])<100],colnames(filt_asv_tab))
     filt_asv_tab <- filt_asv_tab[,-where]
@@ -854,6 +608,15 @@ filtering_steps <- function(asv_tab,taxa_tab,metadata,
 }
 
 seq_depth_filtering <- function(asv_tab, taxa_tab, metadata, seq_depth_threshold=10000){
+  # Performs the sequencing depth filtering
+  # inputs:
+  # asv_tab - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # taxa_tab - Taxonomy with 'SeqID' and taxonomy
+  # metadata -  metadata with 'SampleID' identifier
+  # seq_depth_threshold - threshold for sequencing depth filtering, default 10,000
+  # outputs:
+  # list(filt_asv_tab,filt_taxa_tab, filt_metadata)
+  
   counts <- apply(asv_tab[,-1],2,sum)
   
   filt_asv_tab <- asv_tab[,c(TRUE,counts>seq_depth_threshold)]
@@ -869,51 +632,15 @@ seq_depth_filtering <- function(asv_tab, taxa_tab, metadata, seq_depth_threshold
   return(list(filt_asv_tab, filt_taxa_tab, filt_metadata))
 }
 
-prevalence_filtering <- function(prevalence_threshold=0.05,asv_table, taxa_tab, metadata){
-  
-  groups <- unique(metadata$Group)
-  
-  filtered_asv_table <- NULL
-  asv_table %<>% column_to_rownames("SeqID")
-  asvs_to_keep <- c()
-  for (group in groups){
-    sub_asv_table <- asv_table[,metadata[metadata$Group==group,"SampleID"]]
-    sub_asv_table_binary <- sub_asv_table
-    sub_asv_table_binary[sub_asv_table>0] <- 1
-    prevalence_df <- apply(sub_asv_table_binary,1,sum)/sum(metadata$Group==group)
-    prevalence_df <- data.frame(SeqID=rownames(asv_table),prevalence_df)
-    
-    sub_asv_table <- data.frame(SeqID=rownames(asv_table),sub_asv_table,check.names = FALSE)
-    sub_asv_table <- sub_asv_table[prevalence_df$prevalence_df>=prevalence_threshold,]
-    asvs_to_keep <- c(asvs_to_keep,rownames(sub_asv_table))
-  }
-  filtered_asv_table <- asv_table[unique(asvs_to_keep),] %>% rownames_to_column("SeqID")
-  data_checked <- data_check(filtered_asv_table,taxa_tab)
-  filt_asv_table <- data_checked[[1]]
-  filt_taxa_tab <- data_checked[[2]]
-  
-  
-  return(list(filt_asv_table,filt_taxa_tab))
-}
-
-abundance_filtering <- function(abundance_threshold=0.05,asv_table, taxa_tab){
-  asv_table %<>% column_to_rownames("SeqID")
-  
-  for (sample in colnames(asv_table)){
-    relative_abundances <- asv_table[,sample]/sum(asv_table[,sample])
-    where_0 <- relative_abundances < abundance_threshold
-    asv_table[where_0,sample] <- 0
-  }
-  asv_table %<>% rownames_to_column("SeqID")
-  data_checked <- data_check(asv_table,taxa_tab)
-  filt_asv_table <- data_checked[[1]]
-  filt_taxa_tab <- data_checked[[2]]
-  
-  
-  return(list(filt_asv_table,filt_taxa_tab))
-}
-
 nearzerovar_filtering <- function(asv_tab,taxa_tab,metadata){
+  # Performs the nearzerovar() filtering
+  # inputs:
+  # asv_tab - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # taxa_tab - Taxonomy with 'SeqID' and taxonomy
+  # metadata -  metadata with 'SampleID' identifier
+  # outputs:
+  # list(filt_asv_tab,filt_taxa_tab)
+  
   asv_tab %<>% column_to_rownames("SeqID")
   groups <- unique(metadata$Group)
   
@@ -936,6 +663,14 @@ nearzerovar_filtering <- function(asv_tab,taxa_tab,metadata){
 }
 
 check_zero_depth <- function(asv_table, taxa_table, metadata){
+  # Checks the dataset for low depth samples and removes them if < 100
+  # inputs:
+  # asv_table - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # taxa_table - Taxonomy with 'SeqID' and taxonomy
+  # metadata -  metadata with 'SampleID' identifier
+  # outputs:
+  # list(filt_asv_table, filt_taxa_tab, filt_metadata)
+  
   if (TRUE %in% (colSums(asv_table[,-1])<100)){
     where <- grep(colnames(asv_table[,-1])[colSums(asv_table[,-1])<100],colnames(asv_table))
     filt_asv_table <- asv_table[,-where]
@@ -951,6 +686,18 @@ check_zero_depth <- function(asv_table, taxa_table, metadata){
 
 final_counts_filtering <- function(asv_tab,filt_asv_tab,filt_metadata,
                                    seq_step,prev_step,nearzero_step){
+  # Creates the summary of filtering steps
+  # inputs:
+  # asv_tab - original data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # filt_asv_tab - filtered data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # filt_metadata - filtered metadata with 'SampleID' identifier
+  # seq_step - number of taxa in filtered dataset
+  # prev_step - 0
+  # nearzero_step - number of taxa in filtered dataset (after nearzerovar())
+  # outputs:
+  # df - dataframe with summarized info about number of ASVs, samples, 
+  # number of filtered ASVs, samples and so on
+  
   df <- data.frame(`Raw data: ASVs`=dim(asv_tab)[1],
                    `Raw data: Samples`=dim(asv_tab)[2]-1,
                    `Sequencing depth filt: ASVs`=seq_step,
@@ -977,62 +724,21 @@ final_counts_filtering <- function(asv_tab,filt_asv_tab,filt_metadata,
 
 ## Statistical testing ----
 
-pairwise.wilcox <- function(formula,factors,data, p.adjust.m ='BH')
-{
-  set.seed(123)
-  #co <- combn(unique(as.character(factors)),2)
-  co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","non-rPSC","rPSC"),
-                   "2"=c("non-rPSC","rPSC","pre_ltx","rPSC","pre_ltx","pre_ltx")) %>% t()
-  p_values <- c()
-  groups <- c()
-  for(elem in 1:ncol(co)){
-    x_sub <- data[factors %in% c(co[1,elem],co[2,elem]),]
-    group <- paste(co[1,elem],"vs",co[2,elem])
-    p_value <- wilcox.test(as.formula(formula), data = x_sub, exact = FALSE)$p.value
-    groups <- c(groups,group)
-    p_values <- c(p_values,p_value)
-  }
-  p.adjusted <- p.adjust(p_values,method=p.adjust.m)
-  
-  
-  sig = c(rep('',length(p.adjusted)))
-  sig[p.adjusted <= 0.05] <-'*'
-  sig[p.adjusted <= 0.01] <-'**'
-  sig[p.adjusted <= 0.001] <-'***'
-  
-  df <- data.frame(pair=groups,
-                   p.value=p_values,
-                   padjust=p.adjusted,
-                   sig=sig)
-  return(df)
-
-}
-
-lm.model <- function(formula,data){
-  model <- coef(summary(lm(as.formula(formula), data = data)))
-  p_values <- model[,4]
-  sig = c(rep('',length(p_values)))
-  sig[p_values <= 0.05] <-'*'
-  sig[p_values <= 0.01] <-'**'
-  sig[p_values <= 0.001] <-'***'
-  df <- data.frame(model,sig=sig)
-  return(df)
-}
-
-lmer.model <- function(formula,data){
-  model <- coef(summary(lmer(as.formula(formula), data = data)))
-  p_values <- model[,4]
-  sig = c(rep('',length(p_values)))
-  sig[p_values <= 0.05] <-'*'
-  sig[p_values <= 0.01] <-'**'
-  sig[p_values <= 0.001] <-'***'
-  df <- data.frame(model,sig=sig)
-  return(df)
-}
-
-
 pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
 {
+  # Runs linear model (LM) for each pairwise comparison of groups in input and
+  # performs the BH correction (or any other set by user). 
+  # In this analysis, it is used in alpha diversity testing. That is why 
+  # the alpha diversity indices are required as input
+  # inputs:
+  # formula - formula for LM
+  # factors - vector or groups to be tested (column from data dataframe)
+  # data - data frame with computed alpha diversity indices
+  # p.adjust.m - method for p adjustment, default BH
+  # outputs:
+  # (list(df,emeans_models, means)): dataframe with results, emeans results when 
+  # posthoc analysis was needed
+  
   set.seed(123)
   #co <- combn(unique(as.character(factors)),2)
   co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","non-rPSC","rPSC"),
@@ -1046,13 +752,17 @@ pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
     co <- data.frame("1"=c("non-rPSC","healthy","healthy"),
                      "2"=c("rPSC","rPSC","non-rPSC")) %>% t()
   } 
-  if (!FALSE %in% (c("healthy","non-rPSC","rPSC","pre_ltx") %in% factors)){
+  if (all(c("healthy","non-rPSC","rPSC","pre_ltx") %in% factors)){
     co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","pre_ltx","pre_ltx"),
                      "2"=c("non-rPSC","rPSC","pre_ltx","rPSC","non-rPSC","rPSC")) %>% t()
   }
   if ("ibd" %in% factors) {
     co <- data.frame("1"=c("no_ibd"),
                      "2"=c("ibd")) %>% t()
+  } 
+  if ("high" %in% factors) {
+    co <- data.frame("1"=c("low"),
+                     "2"=c("high")) %>% t()
   } 
   models <- c()
   names <- c()
@@ -1080,27 +790,28 @@ pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
   
   rownames(means) <- co[1,]
   models <- models[-grep("^[(].+[)]$", names),]
-  models %<>% as.data.frame() %>% `row.names<-`(names[-grep("^[(].+[)]$", names)])
-  
+  if (!is.data.frame(models)) models %<>% as.data.frame() %>% `row.names<-`(names[-grep("^[(].+[)]$", names)])
   if (ncol(co)>1){
     p.adjusted <- p.adjust(models[,"Pr(>|t|)"],method=p.adjust.m)
     models$p.adj <- p.adjusted
-  } else models$p.adj <- p.adjusted <- models[,"Pr(>|t|)"]
-  
-  
-  sig = c(rep('',length(p.adjusted)))
+    sig = c(rep('',length(p.adjusted)))
   sig[p.adjusted <= 0.05] <-'*'
   sig[p.adjusted <= 0.01] <-'**'
   sig[p.adjusted <= 0.001] <-'***'
-  
   df <- data.frame(models,
                    sig=sig)
+  } else df <- models
+  
+  
   return(list(df,emeans_models, means))
   
 }
 
 pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
 {
+  # This function is similar to pairwise.lm(), but performs linear mixed effect models
+  # instead of simple linear model to include the random effect of patient in this analysis
+  
   set.seed(123)
   #co <- combn(unique(as.character(factors)),2)
   co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","non-rPSC","rPSC"),
@@ -1121,6 +832,10 @@ pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
   if ("ibd" %in% factors) {
     co <- data.frame("1"=c("no_ibd"),
                      "2"=c("ibd")) %>% t()
+  }  
+  if ("low" %in% factors) {
+    co <- data.frame("1"=c("low"),
+                     "2"=c("high")) %>% t()
   } 
   
   models <- c()
@@ -1136,18 +851,19 @@ pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
     model <- lmer_renaming(model,c(co[1,elem],co[2,elem]))
     mean_group <- model[1,]
     if (nrow(model)>2){
-      if (model[4,"Pr(>|t|)"]<0.15){
+      if (model[4,"Pr(>|t|)"]<0.1){
       # CZ
       group1_group2_cz <- as.data.frame(coef(summary(lmer(as.formula(gsub(" \\* Country","",formula)), data = subset(x_sub,Country=="CZ")))))
-      
+      rownames(group1_group2_cz)[1] <- paste0(co[1,elem],"_CZ")
       # NO
       group1_group2_no <- as.data.frame(coef(summary(lmer(as.formula(gsub(" \\* Country","",formula)), data = subset(x_sub,Country=="NO")))))
-      
+      rownames(group1_group2_no)[1] <- paste0(co[1,elem],"_NO")
       # GROUP 1 
       group1_country <- as.data.frame(coef(summary(lmer(as.formula(gsub(" Group \\*","",formula)), data = subset(x_sub,Group==co[1,elem])))))
-      
+      rownames(group1_country)[1] <- paste0(co[1,elem],"_CZ")
       # GROUP 2 
       group2_country <- as.data.frame(coef(summary(lmer(as.formula(gsub(" Group \\*","",formula)), data = subset(x_sub,Group==co[2,elem])))))
+      rownames(group2_country)[1] <- paste0(co[2,elem],"_CZ")
       
       p_values <- c(group1_group2_cz$`Pr(>|t|)`[2], 
                     group1_group2_no$`Pr(>|t|)`[2], 
@@ -1202,48 +918,80 @@ pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
   
 }
 
-run.adonis <- function(x,factors,covariate=NULL,interaction=FALSE, patients=NULL,
-                       sim.function = 'vegdist', sim.method = 'robust.aitchison', 
-                       p.adjust.m ='BH',reduce=NULL,perm=999){
+glm_renaming <- function(glm_data, group){
+  # Renames the results of linDA (linda() function $output) based on the chosen group[1] 
+  # inputs:
+  # linda_data - result of linda()$output
+  # group - strings corresponding to the name of the group[1]
+  # outputs:
+  # linda_data - renamed data
   
-  x1 = vegdist(x,method=sim.method)
-  x2 = data.frame(Fac = factors)
-  
-  if (!(is.null(covariate))) {
-    x2$covariate <- covariate
+  if (is.data.frame(glm_data) | is.matrix(glm_data)){
+    # renaming group[1]
+    rownames(glm_data) <- gsub("Intercept",group[1], rownames(glm_data))
+    
+    # renaming main effects
+    rownames(glm_data)[grepl("Group",rownames(glm_data)) & !(grepl(":",rownames(glm_data)))] <-  paste(group[1],"vs",rownames(glm_data)[grepl("Group",rownames(glm_data)) & !(grepl(":",rownames(glm_data)))])
+    rownames(glm_data)[grepl("Country",rownames(glm_data)) & !(grepl(":",rownames(glm_data)))] <- paste(group[1], ",", group[2], "-", "CZ vs NO")
+    
+    # renaming interactions
+    rownames(glm_data)[grepl(":",rownames(glm_data))] <- paste(group[1],"vs",rownames(glm_data)[grepl(":",rownames(glm_data))])
+    
+  } else{
+    message("Check the glm data class")
   }
-  
-  if (!(is.null(patients))){
-    x2$Patient <- patients
-    perm <- custom_permutations(x,factors = x2$Fac,patients = x2$Patient)
-  }
-  
-  if (is.null(covariate)){
-    ad <- adonis2(x1 ~ Fac, data = x2,
-                  permutations = perm, by="margin");
-  } else if ((!is.null(covariate)) & (interaction==FALSE)) {
-    ad <- adonis2(x1 ~ Fac + covariate, data = x2,
-                  permutations = perm, by="margin");
-  } else {
-    ad <- adonis2(x1 ~ Fac * covariate, data = x2,
-                  permutations = perm, by="terms");
-  }
-  
-  rownames(ad)[1] <- "Group"
-  if ("covariate" %in% rownames(ad)) rownames(ad)[2] <- "Country"
-  if ("Fac:covariate" %in% rownames(ad)) rownames(ad)[3] <- "Interaction"
-
-  return(ad)
+  return(glm_data)
 }
 
-
+lmer_renaming <- function(lmer_data, group){
+  # Renames the results of linDA (linda() function $output) based on the chosen group[1] 
+  # inputs:
+  # linda_data - result of linda()$output
+  # group[1] - strings corresponding to the name of the group[1]
+  # outputs:
+  # linda_data - renamed data
+  
+  if (is.data.frame(lmer_data) | is.matrix(lmer_data)){
+    # renaming group[1]
+    rownames(lmer_data) <- gsub("intercept",group[1], rownames(lmer_data))
+    
+    # renaming main effects
+    rownames(lmer_data)[grepl("Group",rownames(lmer_data)) & !(grepl(":",rownames(lmer_data)))] <-  paste(group[1],"vs",rownames(lmer_data)[grepl("Group",rownames(lmer_data)) & !(grepl(":",rownames(lmer_data)))])
+    rownames(lmer_data)[grepl("Country",rownames(lmer_data)) & !(grepl(":",rownames(lmer_data)))] <- paste(group[1],"vs",group[2], "- CZ vs NO")
+    #rownames(lmer_data)[grepl("Matrix",rownames(lmer_data)) & !(grepl(":",rownames(lmer_data)))] <- paste(group[1]," vs ",group[2], "Cecum vs", rownames(lmer_data)[grepl("Matrix",rownames(lmer_data)) & !(grepl(":",rownames(lmer_data)))])
+    
+    # renaming interactions
+    rownames(lmer_data)[grepl(":",rownames(lmer_data))] <- paste(group[1],"vs",rownames(lmer_data)[grepl(":",rownames(lmer_data))])
+    
+  } else{
+    message("Check the lmer data class")
+  }
+  return(lmer_data)
+}
 
 pairwise.adonis <- function(x,factors, covariate=NULL, interaction=FALSE,patients=NULL, 
                             sim.function = 'vegdist', sim.method = 'robust.aitchison',
-                            p.adjust.m ='BH',reduce=NULL,perm=999)
+                            p.adjust.m ='BH',perm=999)
 {
+  # Runs adonis() function (PERMANOVA) for each pairwise comparison of groups in input and
+  # performs the BH correction (or any other set by user). 
+  # Main effects of Group and Country are tested using the by = 'margin' setting. 
+  # Interaction effect is calculated with by = 'terms' setting.
+  # inputs:
+  # x - asv table with SeqID as colnames and samples as rownames
+  # factors - vector or groups to be tested (column from data dataframe)
+  # covariate - vector of covariates (for example Country) that needs to be included as main effect
+  # interaction - boolean, if interaction effect should be calculated, default FALSE
+  # patients - vector of patients, which will be used for custom permutations, default NULL
+  # sim.function - function to be used for distance calculation, default vegdist
+  # sim.method - distance metric, default robust.aitchison
+  # perm - number of permutations, if Patients are provided, custom permutations will be generated,
+  # p.adjust.m - method for p adjustment, default BH
+  # outputs:
+  # list(pairw.res_factor,pairw.res_cov,pairw.res_fac.cov): 
+  # results for main effects of factor, covariate and interaction effect
+  
   set.seed(123)
-  #co <- combn(unique(as.character(factors)),2)
   co <- data.frame("1"=c("healthy","healthy","healthy","non-rPSC","non-rPSC","rPSC"),
                    "2"=c("non-rPSC","rPSC","pre_ltx","rPSC","pre_ltx","pre_ltx")) %>% t()
   
@@ -1264,6 +1012,10 @@ pairwise.adonis <- function(x,factors, covariate=NULL, interaction=FALSE,patient
   if ("ibd" %in% factors) {
     co <- data.frame("1"=c("no_ibd"),
                      "2"=c("ibd")) %>% t()
+  } 
+  if ("high" %in% factors) {
+    co <- data.frame("1"=c("low"),
+                     "2"=c("high")) %>% t()
   } 
 
   pairs_factor <- c()
@@ -1377,6 +1129,19 @@ pairwise.adonis <- function(x,factors, covariate=NULL, interaction=FALSE,patient
 adonis_postanalysis <- function(x,factors, covariate, group1, group2,
                                 patients = NULL, 
                                 sim.method = 'robust.aitchison'){
+  # Performs post-analysis of pairwise PERMANOVA.
+  # In terms of PSC_study, it runs PERMANOVA individually for groups comparison 
+  # for each country individually
+  # inputs:
+  # x - asv table with SeqID as colnames and samples as rownames
+  # factors - vector or groups to be tested (column from data dataframe)
+  # covariate - vector of covariates (for example Country) that needs to be included as main effect
+  # group1 - name of the first group
+  # group2 - name of the second group
+  # patients - vector of patients, which will be used for custom permutations, default NULL
+  # sim.method - distance metric, default robust.aitchison
+  # outputs:
+  # list(group1_group2_cz,group1_group2_no,group1_country,group2_country)
   
   # CZ
   x_sub <- x[(factors %in% c(group1,group2)) & covariate=="CZ",]
@@ -1470,87 +1235,9 @@ adonis_postanalysis <- function(x,factors, covariate, group1, group2,
   return(result_list)
 }
 
-pairwise.adonis_A <- function(x,factors, sim.function = 'vegdist', sim.method = 'bray', p.adjust.m ='bonferroni',reduce=NULL,perm=9999)
-{
-  # This function performs pairwise PERMANOVA, code is modified version of 
-  # https://github.com/pmartinezarbizu/pairwiseAdonis/blob/master/pairwiseAdonis/R/pairwise.adonis.R
-  # inputs:
-  # x - asv table
-  # factors - vector with groups to be tested
-  # sim.function - function for distance calculation
-  # sim.method - distance metric
-  # p.adjust.m - FDR method
-  # perm - number of permutations
-  # outputs:
-  # data frame with pairwise PERMANOVA results
-  
-  co <- combn(unique(as.character(factors)),2)
-  pairs <- c()
-  Df <- c()
-  SumsOfSqs <- c()
-  F.Model <- c()
-  R2 <- c()
-  p.value <- c()
-  
-  
-  for(elem in 1:ncol(co)){
-    if(inherits(x, 'dist')){
-      x1=as.matrix(x)[factors %in% c(as.character(co[1,elem]),as.character(co[2,elem])),
-                      factors %in% c(as.character(co[1,elem]),as.character(co[2,elem]))]
-    }
-    
-    else  (
-      if (sim.function == 'daisy'){
-        x1 = daisy(x[factors %in% c(co[1,elem],co[2,elem]),],metric=sim.method)
-      }
-      else{x1 = vegdist(x[factors %in% c(co[1,elem],co[2,elem]),],method=sim.method)}
-    )
-    
-    x2 = data.frame(Fac = factors[factors %in% c(co[1,elem],co[2,elem])])
-    
-    ad <- adonis2(x1 ~ Fac, data = x2,
-                  permutations = perm);
-    pairs <- c(pairs,paste(co[1,elem],'vs',co[2,elem]));
-    Df <- c(Df,ad$Df[1])
-    SumsOfSqs <- c(SumsOfSqs,ad$SumOfSqs[1])
-    F.Model <- c(F.Model,ad$F[1]);
-    R2 <- c(R2,ad$R2[1]);
-    p.value <- c(p.value,ad$`Pr(>F)`[1])
-  }
-  p.adjusted <- p.adjust(p.value,method=p.adjust.m)
-  
-  sig = c(rep('',length(p.adjusted)))
-  sig[p.adjusted <= 0.05] <-'*'
-  sig[p.adjusted <= 0.01] <-'**'
-  sig[p.adjusted <= 0.001] <-'***'
-  pairw.res <- data.frame(pairs,Df,SumsOfSqs,F.Model,R2,p.value,p.adjusted,sig)
-  
-  if(!is.null(reduce)){
-    pairw.res <- subset (pairw.res, grepl(reduce,pairs))
-    pairw.res$p.adjusted <- p.adjust(pairw.res$p.value,method=p.adjust.m)
-    
-    sig = c(rep('',length(pairw.res$p.adjusted)))
-    sig[pairw.res$p.adjusted <= 0.1] <-'.'
-    sig[pairw.res$p.adjusted <= 0.05] <-'*'
-    sig[pairw.res$p.adjusted <= 0.01] <-'**'
-    sig[pairw.res$p.adjusted <= 0.001] <-'***'
-    pairw.res <- data.frame(pairw.res[,1:7],sig)
-  }
-  class(pairw.res) <- c("pwadonis", "data.frame")
-  return(pairw.res)
-}
-
-### Method summary
-summary.pwadonis = function(object, ...) {
-  cat("Result of pp <- ordering_pp(pairwise.adonis:\n")
-  cat("\n")
-  print(object, ...)
-  cat("\n")
-  cat("Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n")
-}
-
-
 custom_permutations <- function(x,factors,patients, perm=999){
+  # Generates custom permutations, used in adonis()
+  
   # factors - vector of the labels
   # patients - vector of the pacients
   # perm - number of permutations
@@ -1579,100 +1266,33 @@ custom_permutations <- function(x,factors,patients, perm=999){
   return(perm_final)
 }
 
-ordering_pp <- function(pp){
-  groups_order <- c("healthy vs non-rPSC","healthy vs rPSC","healthy vs pre_ltx","non-rPSC vs rPSC","non-rPSC vs pre_ltx","rPSC vs pre_ltx")
-  
-  ordering <- c()
-  for (group_pair in groups_order) {
-    where <- grep(paste0("^",group_pair), pp$pairs)
-    
-    if (length(where)==0) {
-      flip <- unlist(strsplit(group_pair,split=" vs "))
-      flip <- paste0(flip[2]," vs ",flip[1])
-      where <- grep(paste0("^",flip), pp$pairs)
-    }
-    ordering <- c(ordering,where)
-  }
-  
-  pp <- pp[ordering,]
-  return(pp)
-  
-}
-
-
-replace_p_values <- function(p) {
-  if (p <= 0.001) {
-    return("***")
-  } else if (p <= 0.01) {
-    return("**")
-  } else if (p <= 0.05) {
-    return("*")
-  } else {
-    return(as.character(p))
-  }
-}
-
-add_significance <- function(model_df){
-  model_df$sig <- c(rep('',nrow(model_df)))
-  model_df$sig[model_df$`Pr(>|t|)` <= 0.05] <-'**'
-  model_df$sig[model_df$`Pr(>|t|)` <= 0.01] <-'**'
-  model_df$sig[model_df$`Pr(>|t|)` <= 0.001] <-'***'
-  return(model_df)
-}
-
-glm_renaming <- function(glm_data, group){
-  # This function renames the results of linDA (linda() function $output) based on the chosen group[1] 
-  # inputs:
-  # linda_data - result of linda()$output
-  # group[1] - strings corresponding to the name of the group[1]
-  # outputs:
-  # linda_data - renamed data
-  
-  if (is.data.frame(glm_data) | is.matrix(glm_data)){
-    # renaming group[1]
-    rownames(glm_data) <- gsub("Intercept",group[1], rownames(glm_data))
-    
-    # renaming main effects
-    rownames(glm_data)[grepl("Group",rownames(glm_data)) & !(grepl(":",rownames(glm_data)))] <-  paste(group[1],"vs",rownames(glm_data)[grepl("Group",rownames(glm_data)) & !(grepl(":",rownames(glm_data)))])
-    rownames(glm_data)[grepl("Country",rownames(glm_data)) & !(grepl(":",rownames(glm_data)))] <- paste(group[1], ",", group[2], "-", "CZ vs NO")
-    
-    # renaming interactions
-    rownames(glm_data)[grepl(":",rownames(glm_data))] <- paste(group[1],"vs",rownames(glm_data)[grepl(":",rownames(glm_data))])
-    
-  } else{
-    message("Check the glm data class")
-  }
-  return(glm_data)
-}
-
-lmer_renaming <- function(lmer_data, group){
-  # This function renames the results of linDA (linda() function $output) based on the chosen group[1] 
-  # inputs:
-  # linda_data - result of linda()$output
-  # group[1] - strings corresponding to the name of the group[1]
-  # outputs:
-  # linda_data - renamed data
-  
-  if (is.data.frame(lmer_data) | is.matrix(lmer_data)){
-    # renaming group[1]
-    rownames(lmer_data) <- gsub("intercept",group[1], rownames(lmer_data))
-    
-    # renaming main effects
-    rownames(lmer_data)[grepl("Group",rownames(lmer_data)) & !(grepl(":",rownames(lmer_data)))] <-  paste(group[1],"vs",rownames(lmer_data)[grepl("Group",rownames(lmer_data)) & !(grepl(":",rownames(lmer_data)))])
-    rownames(lmer_data)[grepl("Country",rownames(lmer_data)) & !(grepl(":",rownames(lmer_data)))] <- paste(group[1],"vs",group[2], "- CZ vs NO")
-    #rownames(lmer_data)[grepl("Matrix",rownames(lmer_data)) & !(grepl(":",rownames(lmer_data)))] <- paste(group[1]," vs ",group[2], "Cecum vs", rownames(lmer_data)[grepl("Matrix",rownames(lmer_data)) & !(grepl(":",rownames(lmer_data)))])
-    
-    # renaming interactions
-    rownames(lmer_data)[grepl(":",rownames(lmer_data))] <- paste(group[1],"vs",rownames(lmer_data)[grepl(":",rownames(lmer_data))])
-    
-  } else{
-    message("Check the lmer data class")
-  }
-  return(lmer_data)
-}
-
 ## Visualization functions ----
+
+taxon_boxplot <- function(asv_tab,taxa_tab,metadata,taxon){
+  asv_tab <- as.data.frame(rrarefy(
+    asv_tab %>% t(), 
+    sample=10000)) %>% t() %>% as.data.frame() %>% rownames_to_column("SeqID")
+  
+  boxplot_df <- asv_tab %>% dplyr::filter(SeqID==taxon) %>% 
+    column_to_rownames("SeqID") %>% t() %>% as.data.frame() %>%
+    rownames_to_column("SampleID")
+  
+  boxplot_df <- merge(boxplot_df,metadata,by="SampleID",all.x=TRUE)
+  boxplot_df %<>% dplyr::mutate(taxon=log(!!sym(taxon)))
+  p <- ggplot(data=boxplot_df) + 
+    geom_boxplot(aes(x=Group,y=(taxon)))
+  
+}
+
 horizontal_barplot <- function(wb,taxa){
+  # Generates a horizontal barplot showing the prevalence of taxa in individual groups,
+  # This plot is visualized next to the dot-heatmap in DAA visualization
+  # inputs:
+  # wb - workbook that contains the univariate statistics about each taxon
+  # taxa - taxa for which barplots should be generated, usually the one in dotheatmap
+  # outputs:
+  # p - horizontal barplot, ggplot object
+  
   sheets_names <- sheets(wb)
   groups_names <- unique(unlist(strsplit(sheets_names,split=" vs ")))
   prevalences_df <- NULL
@@ -1681,7 +1301,6 @@ horizontal_barplot <- function(wb,taxa){
     group1_name <- unlist(strsplit(name,split=" vs "))[1]
     group2_name <- unlist(strsplit(name,split=" vs "))[2]
     df <- readWorkbook(wb, sheet = name)
-    #df <- df[df$final_sig,]
     if (is.null(prevalences_df)){
       prevalences_df <- df[,c("SeqID",paste0("PREVALENCE_.",group1_name),
                               paste0("PREVALENCE_.",group2_name))] %>% `rownames<-`(NULL)
@@ -1701,6 +1320,15 @@ horizontal_barplot <- function(wb,taxa){
       PREVALENCE_.post_ltx = coalesce(PREVALENCE_.post_ltx[1], PREVALENCE_.post_ltx[2]),
       PREVALENCE_.pre_ltx = coalesce(PREVALENCE_.pre_ltx[1], PREVALENCE_.pre_ltx[2])
     ) 
+  } else if (any(grepl("rPSC",colnames(prevalences_df))) & any(grepl("pre_ltx",colnames(prevalences_df)))){
+    prevalences_df <- prevalences_df %>%
+      group_by(SeqID) %>%
+      summarise(
+        PREVALENCE_.healthy = coalesce(PREVALENCE_.healthy[1], PREVALENCE_.healthy[2]),
+        PREVALENCE_.pre_ltx = coalesce(PREVALENCE_.pre_ltx[1], PREVALENCE_.pre_ltx[2]),
+        `PREVALENCE_.non-rPSC` = coalesce(`PREVALENCE_.non-rPSC`[1], `PREVALENCE_.non-rPSC`[2]),
+        PREVALENCE_.rPSC = coalesce(PREVALENCE_.rPSC[1], PREVALENCE_.rPSC[2])
+      ) 
   } else if (any(grepl("rPSC",colnames(prevalences_df)))){
     prevalences_df <- prevalences_df %>%
       group_by(SeqID) %>%
@@ -1742,12 +1370,13 @@ horizontal_barplot <- function(wb,taxa){
     colors <- c("#309f87","#f9c675","#425387","#d55c4a")
     prevalences_df_melt$variable <- factor(prevalences_df_melt$variable,levels = c("HC","pre_LTx","post_LTx"))
   }
-  else if ("rPSC" %in% prevalences_df_melt$variable) {
+  else if (("rPSC" %in% prevalences_df_melt$variable) & ("pre_LTx" %in% prevalences_df_melt$variable)) {
+    colors <- c("#309f87","#f9c675","#F08080","#A00000")
+    prevalences_df_melt$variable <- factor(prevalences_df_melt$variable,levels = c("HC","pre_LTx", "non-rPSC","rPSC"))
+  } else if ("rPSC" %in% prevalences_df_melt$variable) {
     colors <- c("#309f87","#F08080","#A00000")
     prevalences_df_melt$variable <- factor(prevalences_df_melt$variable,levels = c("HC","non-rPSC","rPSC"))
   } else if ("ibd" %in% alpha_data$Group){
-    #colors <- c("#1B7837","#B2182B")  
-    #colors <- c("#D04E36", "#3F7D3C")  
     colors <- c("#A06A2C", "#B2182B")  
     
     prevalences_df_melt$variable <- factor(prevalences_df_melt$variable,levels = c("no_ibd","ibd"))
@@ -1759,35 +1388,23 @@ horizontal_barplot <- function(wb,taxa){
     coord_flip() + 
     scale_fill_manual(values=colors)  +
     theme_minimal() + 
-    theme(axis.title.x =element_text(size=10),
+    theme(axis.title.x =element_text(size=8),
           axis.text.x = element_text(size=4),
           axis.text.y = element_blank(),
-          panel.grid = element_blank(),
           axis.line.y.left = element_blank(),
           axis.line.x.bottom = element_blank(),
           axis.ticks.y.left = element_blank())+
+    scale_y_continuous(breaks=c(0,0.5,1)) + theme(axis.text.x=element_text(size=8)) + 
     ylab("Prevalence") + 
     xlab("") + 
-    theme(legend.position = "none") #+ 
-    #scale_y_reverse()
-
+    theme(legend.position = "none")
+  
   return(p)
 }
 
-mpse_barplot <- function(mpse_object, taxonomic_level="Genus", topn=20){
-  p <- ikem_mpse %>%
-    mp_plot_abundance(
-      .abundance = Abundance,
-      .group= Group_matrix,
-      taxa.class = !!as.name(taxonomic_level), 
-      topn = topn,
-      relative = TRUE,
-      plot.group = TRUE,
-      force = TRUE)
-  return(p)
-}
-
-boxplot_subgroups <-function(alpha_data,labels){
+alpha_diversity_custom_2 <- function(alpha_data, size=1.5,width=0.2){
+  alpha_data %<>% drop_na()
+  #colnames(alpha_data)[which(colnames(alpha_data)=="Observe")] <- "Richness"
   alpha_data <- alpha_data %>%
     mutate(Group = case_when(
       Group == "healthy" ~ "HC",
@@ -1796,6 +1413,7 @@ boxplot_subgroups <-function(alpha_data,labels){
       TRUE ~ Group  # Keep other values as is
     ))
   
+  if ("Observe" %in% colnames(alpha_data)) alpha_data %<>% dplyr::mutate(Richness=Observe)
   if ("post_LTx" %in% alpha_data$Group) {
     colors <- c("#309f87","#f9c675","#425387","#d55c4a")
     alpha_data$Group <- factor(alpha_data$Group,levels = c("HC","pre_LTx","post_LTx"))
@@ -1803,25 +1421,70 @@ boxplot_subgroups <-function(alpha_data,labels){
   else if ("rPSC" %in% alpha_data$Group) {
     colors <- c("#309f87","#F08080","#A00000")
     alpha_data$Group <- factor(alpha_data$Group,levels = c("HC","non-rPSC","rPSC"))
+  } else if ("ibd" %in% alpha_data$Group){
+    #colors <- c("#1B7837","#B2182B")  
+    #colors <- c("#D04E36", "#3F7D3C")  
+    colors <- c("#A06A2C", "#B2182B")  
+    alpha_data$Group <- factor(alpha_data$Group,levels = c("no_ibd","ibd"))
   }
-  else (cat("chyba","\n"))
-  alpha_data_melted <- melt(alpha_data)
+    else if ("high" %in% alpha_data$Group){
+      colors <- c("#A06A2C", "#B2182B")  
+      alpha_data$Group <- factor(alpha_data$Group,levels = c("low","high"))
+  } else (print("chyba","\n"))
+  richness_limit <- max(alpha_data$Richness) + 0.2*max(alpha_data$Richness)
+  p_richness <- ggplot() + 
+    geom_boxplot(data=alpha_data, aes(x=Group, y=Richness),outliers = FALSE) + 
+    geom_jitter(width = width,height = 0,data=alpha_data,aes(x=Group, y=Richness, color=Group,
+                                                             shape=Country),size=size) +
+    scale_y_continuous(breaks = seq(0, richness_limit, by = 50)) + 
+    ylim(0,richness_limit) + 
+    scale_color_manual(values=colors) +
+    scale_fill_manual(values=c("#ffffff","#ffffff")) +
+    theme_minimal() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
+          axis.ticks.x = element_line(size=0.3,color = "black"),
+          axis.ticks.y = element_line(size=0.3,color="black"),
+          axis.ticks.length = unit(4,"pt"),
+          panel.grid = element_blank()) + 
+    xlab("") + 
+    ylab("Richness") + 
+    theme(axis.text.x = element_text(angle = 45,vjust = 0.5))
+  
+  shannon_limit <- max(alpha_data$Shannon) + 0.2*max(alpha_data$Shannon)
+  p_shannon <- ggplot() + 
+    geom_boxplot(data=alpha_data, aes(x=Group, y=Shannon),outliers = FALSE) + 
+    geom_jitter(width = width,height = 0,data=alpha_data,aes(x=Group, y=Shannon, color=Group,
+                                                             shape=Country),size=size) +
+    scale_y_continuous(breaks = seq(0, shannon_limit, by = 1)) + 
+    ylim(0,shannon_limit) + 
+    scale_color_manual(values=colors) +
+    scale_fill_manual(values=c("#ffffff","#ffffff")) +
+    theme_minimal() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
+          axis.ticks.x = element_line(size=0.3,color = "black"),
+          axis.ticks.y = element_line(size=0.3,color="black"),
+          axis.ticks.length = unit(4,"pt"),
+          panel.grid = element_blank()) + 
+    xlab("") + 
+    ylab("Shannon") + 
+    theme(axis.text.x = element_text(angle = 45,vjust = 0.5))
   
   
-  p <- ggplot() + 
-    geom_boxplot(data=alpha_data_melted, aes(x=Group, y=value, fill=Group, color=Country)) + 
-    geom_text(data = labels, aes(x=x, y= y, label = label),size=3) +
-    scale_color_manual(values=c("#000000","#000000","#000000","#000000")) +
-    scale_fill_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) + 
-    guides(fill="none",color = "none") + 
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))+ 
-    facet_wrap(~variable, ncol = 4,scales = "free")
+  p <- ggarrange(p_richness,p_shannon,common.legend = TRUE,legend="none")
   return(p)
 }
-
+  
 alpha_diversity_countries <-function(alpha_data,show_legend=FALSE){
+  # Generates a scatterplot + boxplot showing the alpha diversity indices 
+  # (Richness and Shannon) for each country individually
+  # inputs:
+  # alpha_data - metadata-like dataframe with 'SampleID' identifier
+  #              and 'Observe' and 'Shannon' columns
+  # show_legend - boolean, should legend be visualized?, default FALSE 
+  #               (legends are added manually in publication-ready plots) 
+  # outputs:
+  # p - horizontal barplot, ggplot object
+  
   alpha_data <- alpha_data %>%
     mutate(Group = case_when(
       Group == "healthy" ~ "HC",
@@ -1842,7 +1505,14 @@ alpha_diversity_countries <-function(alpha_data,show_legend=FALSE){
     colors <- c("#A06A2C", "#B2182B")  
 
     alpha_data$Group <- factor(alpha_data$Group,levels = c("no_ibd","ibd"))
+  } else if ("low" %in% alpha_data$Group){
+    #colors <- c("#1B7837","#B2182B")  
+    #colors <- c("#D04E36", "#3F7D3C")  
+    colors <- c("#A06A2C", "#B2182B")  
+    
+    alpha_data$Group <- factor(alpha_data$Group,levels = c("low","high"))
   }
+  
   else (print("chyba","\n"))
   
   alpha_data$Country <- factor(alpha_data$Country,levels = c('CZ','NO'))
@@ -1854,16 +1524,20 @@ alpha_diversity_countries <-function(alpha_data,show_legend=FALSE){
     geom_boxplot(aes(fill=Country), outlier.shape = NA, position=position_dodge(width=0.8)) + 
     geom_jitter(aes(x=Group, y=value, color=Group, shape=Country), 
                 position=position_jitterdodge(jitter.width=0.7, dodge.width=0.8), 
-                size=1) + 
+                size=0.5) + 
     scale_color_manual(values=colors) +
     scale_fill_manual(values=c("#ffffff","#ffffff")) +
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
+    theme_minimal() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
+          axis.ticks.x = element_line(size=0.3,color = "black"),
+          axis.ticks.y = element_line(size=0.3,color="black"),
+          axis.ticks.length = unit(4,"pt"),
+          panel.grid = element_blank()) + 
     xlab("") + 
     ylab("Richness") + 
     scale_y_continuous(breaks = seq(0, richness_limit, by = 50)) + 
     ylim(0,richness_limit)  + 
-    theme(axis.text.x = element_text(angle = 45,face = "bold",vjust = 0.5))
+    theme(axis.text.x = element_text(angle = 45,vjust = 0.5))
   
   alpha_shannon_data <- melt(alpha_data) %>% dplyr::filter(variable=="Shannon")
   shannon_limit <- max(alpha_data$Shannon) + 0.2*max(alpha_data$Shannon)
@@ -1872,16 +1546,20 @@ alpha_diversity_countries <-function(alpha_data,show_legend=FALSE){
     geom_boxplot(aes(fill=Country), outlier.shape = NA, position=position_dodge(width=0.8)) + 
     geom_jitter(aes(x=Group, y=value, color=Group, shape=Country), 
                 position=position_jitterdodge(jitter.width=0.7, dodge.width=0.8), 
-                size=1) + 
+                size=0.5) + 
     scale_color_manual(values=colors) +
     scale_fill_manual(values=c("#ffffff","#ffffff")) +
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
+    theme_minimal() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
+          axis.ticks.x = element_line(size=0.3,color = "black"),
+          axis.ticks.y = element_line(size=0.3,color="black"),
+          axis.ticks.length = unit(4,"pt"),
+          panel.grid = element_blank()) + 
     xlab("") + 
     ylab("Shannon") + 
     scale_y_continuous(breaks = seq(0, shannon_limit, by = 50)) + 
     ylim(0,shannon_limit) + 
-    theme(axis.text.x = element_text(angle = 45,face = "bold",vjust = 0.5))
+    theme(axis.text.x = element_text(angle = 45,vjust = 0.5))
   
   if (show_legend){
     p <- ggarrange(p_richness,p_shannon,common.legend = TRUE,legend="right")
@@ -1892,194 +1570,6 @@ alpha_diversity_countries <-function(alpha_data,show_legend=FALSE){
   return(p)
 }
 
-alpha_diversity_custom <- function(alpha_data, size=1.5){
-  alpha_data_melted <- melt(alpha_data)
-  if ("post_ltx" %in% alpha_data$Group) colors <- c("#309f87","#425387","#f9c675","#d55c4a")
-  else if ("rPSC" %in% alpha_data$Group) colors <- c("#309f87","#F08080","#A00000")
-  else (cat("chyba","\n"))
-  p <- ggplot() + 
-    geom_boxplot(data=alpha_data_melted, aes(x=Group, y=value),outliers = FALSE) + 
-    geom_jitter(width = 0.2,height = 0,data=alpha_data_melted,aes(x=Group, y=value, color=Group),size=size) +
-    #scale_color_manual(values=c("#000000","#000000","#000000","#000000")) +
-    scale_color_manual(values=colors) + 
-    scale_fill_manual(values=colors) + 
-    guides(fill="none",color = "none") + 
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
-    theme(axis.text.x = element_text(angle = 0,face = "bold"))+ 
-    facet_wrap(~variable, ncol = 4,scales = "free")  + 
-    xlab("") + 
-    ylab("Alpha index value")
-  
-  return(p)
-}
-
-alpha_diversity_custom_2 <- function(alpha_data, size=1.5,width=0.2){
-  #colnames(alpha_data)[which(colnames(alpha_data)=="Observe")] <- "Richness"
-  alpha_data <- alpha_data %>%
-    mutate(Group = case_when(
-      Group == "healthy" ~ "HC",
-      Group == "post_ltx" ~ "post_LTx",
-      Group == "pre_ltx" ~ "pre_LTx",
-      TRUE ~ Group  # Keep other values as is
-    ))
-  
-  if ("post_LTx" %in% alpha_data$Group) {
-    colors <- c("#309f87","#f9c675","#425387","#d55c4a")
-    alpha_data$Group <- factor(alpha_data$Group,levels = c("HC","pre_LTx","post_LTx"))
-  }
-  else if ("rPSC" %in% alpha_data$Group) {
-    colors <- c("#309f87","#F08080","#A00000")
-    alpha_data$Group <- factor(alpha_data$Group,levels = c("HC","non-rPSC","rPSC"))
-  } else if ("ibd" %in% alpha_data$Group){
-    #colors <- c("#1B7837","#B2182B")  
-    #colors <- c("#D04E36", "#3F7D3C")  
-    colors <- c("#A06A2C", "#B2182B")  
-    
-    alpha_data$Group <- factor(alpha_data$Group,levels = c("no_ibd","ibd"))
-  } else (print("chyba","\n"))
-  richness_limit <- max(alpha_data$Richness) + 0.2*max(alpha_data$Richness)
-  p_richness <- ggplot() + 
-    geom_boxplot(data=alpha_data, aes(x=Group, y=Richness),outliers = FALSE) + 
-    geom_jitter(width = width,height = 0,data=alpha_data,aes(x=Group, y=Richness, color=Group,
-                                                           shape=Country),size=size) +
-    scale_y_continuous(breaks = seq(0, richness_limit, by = 50)) + 
-    ylim(0,richness_limit) + 
-    #scale_color_manual(values=c("#000000","#000000","#000000","#000000")) +
-    scale_color_manual(values=colors) + 
-    scale_fill_manual(values=colors) + 
-    guides(fill="none",color = "none") + 
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 1)) + 
-    theme(axis.text.x = element_text(angle = 45,face = "bold",vjust = 0.5))+ 
-    xlab("") + 
-    ylab("Richness")
-  
-  shannon_limit <- max(alpha_data$Shannon) + 0.2*max(alpha_data$Shannon)
-  p_shannon <- ggplot() + 
-    geom_boxplot(data=alpha_data, aes(x=Group, y=Shannon),outliers = FALSE) + 
-    geom_jitter(width = width,height = 0,data=alpha_data,aes(x=Group, y=Shannon, color=Group,
-                                                           shape=Country),size=size) +
-    scale_y_continuous(breaks = seq(0, shannon_limit, by = 1)) + 
-    ylim(0,shannon_limit) + 
-    #scale_color_manual(values=c("#000000","#000000","#000000","#000000")) +
-    scale_color_manual(values=colors) + 
-    scale_fill_manual(values=colors) + 
-    guides(fill="none",color = "none") + 
-    theme_classic() + 
-    theme(axis.text.x = element_text(angle = 45,face = "bold",vjust = 0.5))+ 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 1)) + 
-    xlab("") + 
-    ylab("Shannon")
-  
-  p <- ggarrange(p_richness,p_shannon,common.legend = TRUE,legend="none")
-  return(p)
-}
-
-
-volcano_plot <- function(glm.test,glm.eff,group,taxa_table,cutoff.pval=0.05,cutoff.rare=0){
-  column <- paste(group,":pval.padj", sep="")
-  called <- glm.test[,column] <= cutoff.pval
-  all.p <- glm.test[,column]
-  all.col <- rgb(0, 0, 0, 0.2)
-  
-  data_df <- data.frame(x=glm.eff[[group]]$diff.btw,
-                        y=-1*log10(all.p),
-                        rab.all=glm.eff[[group]]$rab.all,
-                        name=rownames(glm.eff[[group]]))
-  data_rare <- data_df[data_df$rab.all<cutoff.rare,]
-  data_called <- data_df[called,]
-  taxa_table <- taxa_table %>% column_to_rownames("SeqID")
-  data_called$name <- taxa_table[data_called$name,"Genus"]
-  
-  maximum <- max(c(abs(min(data_df$x)), abs(max(data_df$x))))
-  p <- ggplot(data=data_df, aes(x=x,y=y)) +
-    geom_point(colour=all.col, shape=19, size=3) + theme_bw() + 
-    xlab("Median Log"[2]~" Difference") + ylab("-1 * Median Log"[10]~" q value") +
-    geom_point(data=data_called, aes(x=x,y=y), colour="red", size=3)+
-    theme(plot.title = element_text(hjust = 0.5,face = "bold",size=15),
-          axis.title=element_text(size=10)) + 
-    geom_vline(xintercept=1.5, linetype=2, colour="grey")+ 
-    geom_vline(xintercept=-1.5, linetype=2, colour="grey")+ 
-    coord_cartesian(xlim = c(-maximum,maximum), clip="on") +
-    geom_hline(yintercept=-1*log10(0.05),linetype=2, colour="grey") +
-    geom_text_repel(data=data_called, aes(x = x, y = y, 
-                                          label = name),size=3)
-  return(p)
-}
-
-pca_plots <- function(mpse_object,by="Group"){
-  plot_12 <- mpse_object %>% mp_plot_ord(
-    .ord = pcoa, 
-    .group = !!sym(by), 
-    .color = !!sym(by), 
-    ellipse = TRUE, show.legend = FALSE) +
-    scale_fill_manual(
-      values=c("#00A087FF", "#3C5488FF","#FFC470","#DD5746"), 
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_color_manual(
-      values=c("#00A087FF", "#3C5488FF","#FFC470","#DD5746"),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_size_continuous(
-      range=c(0.5, 3),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) + 
-    ggtitle("PC1 vs PC2")
-  
-  plot_13 <- mpse_object %>% mp_plot_ord(
-    .ord = pcoa, 
-    .group = !!sym(by), 
-    .color = !!sym(by), 
-    .dim=c(1,3),
-    ellipse = TRUE, show.legend = FALSE ) +
-    scale_fill_manual(
-      values=c("#00A087FF", "#3C5488FF","#FFC470","#DD5746"), 
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_color_manual(
-      values=c("#00A087FF", "#3C5488FF","#FFC470","#DD5746"),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_size_continuous(
-      range=c(0.5, 3),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) + 
-    ggtitle("PC1 vs PC3")
-  
-  plot_23 <- mpse_object %>% mp_plot_ord(
-    .ord = pcoa, 
-    .group = !!sym(by), 
-    .color = !!sym(by), 
-    .dim=c(2,3),
-    ellipse = TRUE, show.legend = FALSE ) +
-    scale_fill_manual(
-      values=c("#00A087FF", "#3C5488FF","#FFC470","#DD5746"), 
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_color_manual(
-      values=c("#00A087FF", "#3C5488FF","#FFC470","#DD5746"),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_size_continuous(
-      range=c(0.5, 3),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) + 
-    ggtitle("PC2 vs PC3")
-  
-  return(list(plot_12,plot_13,plot_23))
-  
-}
-
-ordiArrowMul_custom <- function (x, ord, at = c(0,0), fill = 0.75,
-                            display, choices = c(1,2)) {
-  X <- do.call(rbind,scores(x,c("vectors", "factors")))
-  u <- c(0,max(abs(range(ord$vectors[,1]))),0,max(abs(range(ord$vectors[,2]))))
-  u <- u - rep(at, each = 2)
-  r <- c(range(X[,1], na.rm = TRUE), range(X[,2], na.rm = TRUE))
-  ## 'rev' takes care of reversed axes like xlim(1,-1)
-  rev <- sign(diff(u))[-2]
-  if (rev[1] < 0)
-    u[1:2] <- u[2:1]
-  if (rev[2] < 0)
-    u[3:4] <- u[4:3]
-  u <- u/r
-  u <- u[is.finite(u) & u > 0]
-  return(fill * min(u))
-}
-
 pca_plot_custom <- function(asv_table,taxa_table,metadata, 
                             measure="robust.aitchison",
                             show_boxplots = TRUE,
@@ -2087,17 +1577,32 @@ pca_plot_custom <- function(asv_table,taxa_table,metadata,
                             show_legend=TRUE,
                             clinical=FALSE,
                             clinical_metadata=NULL){
+  # Generates a PCA plot showing the beta diversity of the dataset 
+  # inputs:
+  # asv_table - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # taxa_table - Taxonomy with 'SeqID' and taxonomy
+  # metadata - data frame with 'SampleID' identifier
+  # measure - beta diversity distance metric, default robust.aitchison
+  # show_boxplots - boolean, should boxplots be visualized along the PC, default TRUE 
+  # show_legend - boolean, should legend be visualized?, default TRUE 
+  # variable - variable that should be used for color-coding, default 'Group'
+  # size - size of the points, default 2
+  # clinical - boolean, if clinical variables should be visualized as BIPLOT, default FALSE
+  # clinical_metadata, if clinical=TRUE, clinical_metadata should be provided with 'SampleID' identifier
+  # outputs:
+  # p - PCA plot, ggplot object
   
-  metadata <- metadata %>%
+  if (variable=="Group"){
+    metadata <- metadata %>%
     mutate(Group = case_when(
       Group == "healthy" ~ "HC",
       Group == "post_ltx" ~ "post_LTx",
       Group == "pre_ltx" ~ "pre_LTx",
       TRUE ~ Group  # Keep other values as is
     ))
+  }
   
-  #metadata$Group <- factor(metadata$Group,levels = c("HC","pre_LTx","non-rPSC","rPSC"))
-  if (clinical & !is.null(clinical_metadata)){
+    if (clinical & !is.null(clinical_metadata)){
     clinical_metadata <- clinical_metadata %>%
       mutate(Group = case_when(
         Group == "healthy" ~ "HC",
@@ -2107,32 +1612,35 @@ pca_plot_custom <- function(asv_table,taxa_table,metadata,
       )) %>% 
       dplyr::filter(SampleID %in% metadata$SampleID) %>%
       column_to_rownames("SampleID") %>%
-      dplyr::select(-c(Matrix,Group,Country))
+      dplyr::select(-c(Group,Country))
     
-    if (length(unique(clinical_metadata$PatientID))==nrow(clinical_metadata)){
-      clinical_metadata %<>% dplyr::select(-c(PatientID))
+    #if (length(unique(clinical_metadata$PatientID))==nrow(clinical_metadata)){
+    #  clinical_metadata %<>% dplyr::select(-c(PatientID))
+  #}
+  }
+  
+  if (variable=="Group"){
+    if ("post_LTx" %in% metadata[,variable]) {
+      colors <- c("#309f87","#f9c675","#425387")
+      metadata[,variable] <- factor(metadata[,variable],levels = c("HC","pre_LTx","post_LTx"))
+    }
+    else if (("rPSC" %in% metadata[,variable]) & 
+             ("pre_LTx" %in% metadata[,variable])) {
+      colors <- c("#309f87","#f9c675","#F08080","#A00000")
+      metadata[,variable] <- factor(metadata[,variable],levels = c("HC","pre_LTx","non-rPSC","rPSC"))
+    }
+    else if ("ibd" %in% metadata[,variable]){
+      colors <- c("#A06A2C", "#B2182B")  
+      metadata[,variable] <- factor(metadata[,variable],levels = c("no_ibd","ibd"))
+    } else if ("high" %in% metadata[,variable]){
+      colors <- c("#A06A2C", "#B2182B")  
+      metadata[,variable] <- factor(metadata[,variable],levels = c("low","high"))
+    }
+    else {colors <- c("#309f87","#F08080","#A00000")
+    metadata[,variable] <- factor(metadata[,variable],levels = c("HC","non-rPSC","rPSC"))
     }
   }
   
-  if ("post_LTx" %in% metadata$Group) {
-    colors <- c("#309f87","#f9c675","#425387")
-    metadata$Group <- factor(metadata$Group,levels = c("HC","pre_LTx","post_LTx"))
-  }
-  else if (("rPSC" %in% metadata$Group) & 
-           ("pre_LTx" %in% metadata$Group)) {
-    colors <- c("#309f87","#f9c675","#F08080","#A00000")
-    metadata$Group <- factor(metadata$Group,levels = c("HC","pre_LTx","non-rPSC","rPSC"))
-  }
-  else if ("ibd" %in% metadata$Group){
-    #colors <- c("#1B7837","#B2182B")  
-    #colors <- c("#D04E36", "#3F7D3C")  
-    colors <- c("#A06A2C", "#B2182B")  
-    
-    metadata$Group <- factor(metadata$Group,levels = c("no_ibd","ibd"))
-  }
-  else {colors <- c("#309f87","#F08080","#A00000")
-  metadata$Group <- factor(metadata$Group,levels = c("HC","non-rPSC","rPSC"))
-  }
   
   ps <- construct_phyloseq(asv_table,taxa_table,metadata)
   if (measure=="robust.aitchison"){
@@ -2156,6 +1664,14 @@ pca_plot_custom <- function(asv_table,taxa_table,metadata,
   imp_vec <- ord$values$Relative_eig
   pca_vec <- ord$vectors
   
+  normalize_to_range <- function(x) {
+    min_x <- min(x)
+    max_x <- max(x)
+    return(2 * (x - min_x) / (max_x - min_x) - 1)
+  }
+  
+  if (clinical) pca_vec <- apply(pca_vec,2,function(x) normalize_to_range(x))
+
   x_lab = paste("PCo1 ", "(",round(imp_vec[1]*100,2),"%", ")", sep="")
   y_lab = paste("PCo2 ", "(",round(imp_vec[2]*100,2),"%", ")", sep="")
   
@@ -2165,31 +1681,37 @@ pca_plot_custom <- function(asv_table,taxa_table,metadata,
                    color=!!sym(variable),
                    shape=Country),
                show.legend = show_legend,size=size) + 
-    stat_ellipse(aes(x=pca_vec[,1],y=pca_vec[,2],color=!!sym(variable)),show.legend = FALSE) + 
     xlab(x_lab)+
     ylab(y_lab)+
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
-    theme(legend.position = "right") + 
-    scale_color_manual(values=colors)
+    theme_minimal() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
+          axis.ticks.x = element_line(size=0.3,color = "black"),
+          axis.ticks.y = element_line(size=0.3,color="black"),
+          axis.ticks.length = unit(4,"pt"),
+          panel.grid = element_blank()) + 
+    theme(legend.position = "right") 
   
+  if (variable=="Group") p <- p + 
+    scale_color_manual(values=colors) +
+    stat_ellipse(aes(x=pca_vec[,1],y=pca_vec[,2],color=!!sym(variable)),show.legend = FALSE) 
+  else p <- p + scale_color_gradient2(low = "lightblue", mid = "blue", high = "black")
   if (clinical){
     set.seed(123)
     if ("PatientID" %in% colnames(clinical_metadata)){
-      my_df <- ord$vectors
+      my_df <- pca_vec  %>% as.data.frame()
       clinical_metadata <- clinical_metadata[rownames(my_df),]
       #my_df <- my_df[rownames(clinical_metadata),]
-      my_df <- cbind(my_df,PatientID=clinical_metadata$PatientID) %>% 
-        as.data.frame() %>% 
-        rownames_to_column("SampleID")
+      my_df <- merge(my_df %>% rownames_to_column("SampleID"),
+                     clinical_metadata %>% rownames_to_column("SampleID") %>%
+                       dplyr::select(SampleID,PatientID),by="SampleID",all.x=TRUE) %>% 
+        as.data.frame() 
       my_df <- my_df %>%
-        #group_by(PatientID) %>%
+        group_by(PatientID) %>%
         distinct(PatientID, .keep_all = TRUE) %>%
         as.data.frame() %>%
         column_to_rownames("SampleID") %>%
-        dplyr::select(-PatientID) #%>%
-        #as.numeric() %>%
-        #as.matrix() 
+        dplyr::select(-PatientID) 
+      
       sample_names <- rownames(my_df)
       ord$vectors <- as.data.frame((lapply(my_df, as.numeric))) %>%
         `rownames<-`(sample_names) %>% as.matrix()
@@ -2197,12 +1719,18 @@ pca_plot_custom <- function(asv_table,taxa_table,metadata,
       clinical_metadata <- clinical_metadata[rownames(ord$vectors),]
     }
     
+    
     fit <- envfit(ord=ord$vectors, env=clinical_metadata, perm = 999,na.rm=TRUE)
-    vector_coordinates <- as.data.frame(scores(fit, "vectors")) * ordiArrowMul_custom(fit, ord)
-    vector_coordinates <- vector_coordinates[fit$vectors$pvals < 0.1,]
-    factor_coordinates <- as.data.frame(scores(fit, "factors")) * ordiArrowMul_custom(fit,ord)
-    factor_coordinates <- factor_coordinates[fit$factors$pvals < 0.1,]
+    #vector_coordinates <- as.data.frame(scores(fit, "vectors")) #* ordiArrowMul_custom(fit, ord)
+    #vector_coordinates <- as.data.frame(fit$vectors$arrows)
+    vector_coordinates <- as.data.frame(scores(fit,"vectors")) * ordiArrowMul(fit)
+    vector_coordinates <- vector_coordinates[fit$vectors$pvals < 0.05,]
+    #factor_coordinates <- as.data.frame(scores(fit, "factors")) #* ordiArrowMul_custom(fit,ord)
+    factor_coordinates <- as.data.frame(fit$factors$arrows)
+    factor_coordinates <- factor_coordinates[fit$factors$pvals < 0.05,] * ordiArrowMul(fit)
     pca_loadings <- rbind(vector_coordinates,factor_coordinates)
+    
+    # extracts vector of r2 for each env. variable
     
     # Radial shift function
     rshift = function(r, theta, a=0.03, b=0.03) {
@@ -2245,29 +1773,221 @@ pca_plot_custom <- function(asv_table,taxa_table,metadata,
 }
 
 
-umap_plot <- function(asv_table,metadata, distance="robust.aitchison",neighbors=10,
-                      min_dist=0.1,by=NULL){
-  custom.config <- umap.defaults
-  custom.config$random_state <- 123
-  custom.config$n_neighbors <- neighbors
-  custom.config$min_dist <- min_dist
+pca_plot_corr <- function(asv_table,taxa_table,metadata, 
+                            measure="robust.aitchison",
+                            show_boxplots = TRUE,
+                            variable = "Group", size=2,
+                            segment=NULL,
+                            show_legend=TRUE,
+                            clinical=FALSE,
+                            clinical_metadata=NULL,
+                          variables=NULL){
+  # Generates a PCA plot showing the beta diversity of the dataset 
+  # inputs:
+  # asv_table - data frame with column 'SeqID' corresponding to unique ID for ASV or taxa
+  # taxa_table - Taxonomy with 'SeqID' and taxonomy
+  # metadata - data frame with 'SampleID' identifier
+  # measure - beta diversity distance metric, default robust.aitchison
+  # show_boxplots - boolean, should boxplots be visualized along the PC, default TRUE 
+  # show_legend - boolean, should legend be visualized?, default TRUE 
+  # variable - variable that should be used for color-coding, default 'Group'
+  # size - size of the points, default 2
+  # clinical - boolean, if clinical variables should be visualized as BIPLOT, default FALSE
+  # clinical_metadata, if clinical=TRUE, clinical_metadata should be provided with 'SampleID' identifier
+  # outputs:
+  # p - PCA plot, ggplot object
   
-  r.dist <- as.matrix(vegdist(t(asv_table %>% column_to_rownames("SeqID")), method=distance))
-  umap_plot <- umap(r.dist,input="dist",config=custom.config)
-  data_umap <- data.frame(umap_plot$layout)
-  data_umap <- merge(data_umap %>% rownames_to_column("SampleID"),metadata,by="SampleID")
-  if ("Country" %in% colnames(data_umap)){
-    p <- ggplot(data=data_umap, aes(x=X1,y=X2,color=Group, shape=Country)) + geom_point() + theme_bw() +
-      xlab("UMAP 1") + ylab("UMAP 2") + 
-      scale_color_manual(values=c("#309f87","#425387","#f9c675","#d55c4a"))
-      
-  } else {
-    p <- ggplot(data=data_umap, aes(x=X1,y=X2,color=Group)) + geom_point() + theme_bw() +
-      xlab("UMAP 1") + ylab("UMAP 2") + 
-      scale_color_manual(values=c("#309f87","#425387","#f9c675","#d55c4a"))
+  if (variable=="Group"){
+    metadata <- metadata %>%
+      mutate(Group = case_when(
+        Group == "healthy" ~ "HC",
+        Group == "post_ltx" ~ "post_LTx",
+        Group == "pre_ltx" ~ "pre_LTx",
+        TRUE ~ Group  # Keep other values as is
+      ))
   }
   
-  return(p)
+  if (clinical & !is.null(clinical_metadata)){
+    clinical_metadata <- clinical_metadata %>%
+      mutate(Group = case_when(
+        Group == "healthy" ~ "HC",
+        Group == "post_ltx" ~ "post_LTx",
+        Group == "pre_ltx" ~ "pre_LTx",
+        TRUE ~ Group  # Keep other values as is
+      )) %>% 
+      dplyr::filter(SampleID %in% metadata$SampleID) %>%
+      column_to_rownames("SampleID") %>%
+      dplyr::select(-c(Group,Country))
+    
+    #if (length(unique(clinical_metadata$PatientID))==nrow(clinical_metadata)){
+    #  clinical_metadata %<>% dplyr::select(-c(PatientID))
+    #}
+  }
+  
+  if ("post_LTx" %in% metadata[,variable]) {
+    colors <- c("#309f87","#f9c675","#425387")
+    metadata$Group <- factor(metadata$Group,levels = c("HC","pre_LTx","post_LTx"))
+  }
+  else if (("rPSC" %in% metadata[,variable]) & 
+           ("pre_LTx" %in% metadata$Group)) {
+    colors <- c("#309f87","#f9c675","#F08080","#A00000")
+    metadata$Group <- factor(metadata$Group,levels = c("HC","pre_LTx","non-rPSC","rPSC"))
+  }
+  else if ("ibd" %in% metadata[,variable]){
+    colors <- c("#A06A2C", "#B2182B")  
+    metadata$Group <- factor(metadata$Group,levels = c("no_ibd","ibd"))
+  } else if ("high" %in% metadata[,variable]){
+    colors <- c("#A06A2C", "#B2182B")  
+    metadata$Group <- factor(metadata$Group,levels = c("low","high"))
+  }
+  else {colors <- c("#309f87","#F08080","#A00000")
+  metadata$Group <- factor(metadata$Group,levels = c("HC","non-rPSC","rPSC"))
+  }
+  
+  ps <- construct_phyloseq(asv_table,taxa_table,metadata)
+  if (measure=="robust.aitchison"){
+    ps <- microbiome::transform(ps,"rclr")
+    measure_final <- "euclidean"
+  } else if (measure=="bray") {
+    ps <- transform_sample_counts(ps, function(x) x/sum(x))
+    measure_final <- "bray"
+  } else if (measure=="jaccard") {
+    measure_final <- "jaccard"
+  }
+  
+  data_for_pca <- as.data.frame(t(asv_table[,-which(colnames(asv_table)=="SeqID")]))
+  data_for_pca <- data_for_pca[metadata$SampleID,]
+  data_for_pca <- cbind(data_for_pca,metadata)
+  
+  distMat <- phyloseq::distance(ps, method = measure_final, type = "samples")
+  
+  ord <- phyloseq::ordinate(ps, method = "PCoA", distance = distMat)
+  
+  imp_vec <- ord$values$Relative_eig
+  pca_vec <- ord$vectors
+  
+  normalize_to_range <- function(x) {
+    min_x <- min(x)
+    max_x <- max(x)
+    return(2 * (x - min_x) / (max_x - min_x) - 1)
+  }
+  
+  if (clinical) pca_vec <- apply(pca_vec,2,function(x) normalize_to_range(x))
+  
+ if (clinical){
+    set.seed(123)
+    if ("PatientID" %in% colnames(clinical_metadata)){
+      my_df <- pca_vec  %>% as.data.frame()
+      clinical_metadata <- clinical_metadata[rownames(my_df),]
+      my_df <- merge(my_df %>% rownames_to_column("SampleID"),
+                     clinical_metadata %>% rownames_to_column("SampleID"),by="SampleID",all.x=TRUE) %>% 
+        as.data.frame() 
+      my_df <- my_df %>%
+        group_by(PatientID) %>%
+        distinct(PatientID, .keep_all = TRUE) %>%
+        as.data.frame() %>%
+        column_to_rownames("SampleID") %>%
+        dplyr::select(-PatientID) 
+      
+      sample_names <- rownames(my_df)
+      clinical_metadata %<>% dplyr::select(-PatientID)
+      clinical_metadata <- clinical_metadata[rownames(ord$vectors),]
+      
+  } else {
+   my_df <- pca_vec  %>% as.data.frame()
+   clinical_metadata <- clinical_metadata[rownames(my_df),]
+   my_df <- merge(my_df %>% rownames_to_column("SampleID"),
+                  clinical_metadata %>% rownames_to_column("SampleID"),
+                  by="SampleID",all.x=TRUE) %>% 
+     as.data.frame() 
+  }
+    
+   if (is.null(variables)) variables <- colnames(clinical_metadata)
+   
+   p_values <- c()
+   r_values <- c()
+   for (variable in variables){
+    cor_res <- cor.test(my_df$Axis.1,my_df[,variable], cor.method="spearman",rm.na=TRUE)
+    p_val <- cor_res$p.value
+    r_val <- cor_res$estimate
+    p_values <- c(p_values,p_val)
+    r_values <- c(r_values,r_val)
+   }
+   p_values_adjusted <- p.adjust(p_values,method="BH")
+   names(r_values) <- variables
+   r_values[p_values_adjusted<0.05]
+   res <- data.frame(variable=variables,
+                     r=r_values,
+                     p=p_values,
+                     p.adj=p_values_adjusted)
+   p_values <- c()
+   r_values <- c()
+   for (variable in variables){
+     cor_res <- cor.test(my_df$Axis.2,my_df[,variable], cor.method="spearman",rm.na=TRUE)
+     p_val <- cor_res$p.value
+     r_val <- cor_res$estimate
+     p_values <- c(p_values,p_val)
+     r_values <- c(r_values,r_val)
+   }
+   p_values_adjusted <- p.adjust(p_values,method="BH")
+   names(r_values) <- variables
+   r_values[p_values_adjusted<0.05]
+   res2 <- data.frame(variable=variables,
+                     r=r_values,
+                     p=p_values,
+                     p.adj=p_values_adjusted)
+ } 
+
+  if (segment=="terminal_ileum"){
+    samples_to_test <- rownames(my_df %>% column_to_rownames("SampleID"))
+    mdi_bact <- read.xlsx("../results/Q1/univariate_analysis/psc_effect_terminal_ileum.xlsx")$SeqID
+    
+    
+  } else if (segment=="colon"){
+    samples_to_test <- rownames(my_df)
+    mdi_bact <- read.xlsx("../results/Q1/univariate_analysis/psc_effect_colon.xlsx")$SeqID
+    
+  } else (cat("Invalid segment"))
+  
+  bacteria_df <- vegan::decostand(asv_table %>% column_to_rownames("SeqID"),method = "clr", MARGIN = 2, pseudocount=0.5) %>% as.matrix()
+  bacteria_df <- bacteria_df[,samples_to_test] %>% as.data.frame() %>%  rownames_to_column("SeqID")
+  bacteria_df %<>% dplyr::filter(SeqID %in% mdi_bact)  %>% column_to_rownames("SeqID")
+  pc1 <- my_df$Axis.1
+  pc2 <- my_df$Axis.2
+  
+  corr_coef <- c()
+  p_values1 <- c()
+  r_values1 <- c()
+  p_values2 <- c()
+  r_values2 <- c()
+  for (bact in rownames(bacteria_df)){
+    cor_res <- cor.test(as.vector(as.matrix(bacteria_df[bact,])),pc1,method="spearman")
+    r_values1 <- c(r_values1,cor_res$estimate)
+    p_values1 <- c(p_values1,cor_res$p.value)
+    
+    cor_res <- cor.test(as.vector(as.matrix(bacteria_df[bact,])),pc2,method="spearman")
+    r_values2 <- c(r_values2,cor_res$estimate)
+    p_values2 <- c(p_values2,cor_res$p.value)
+  }
+  
+  names(r_values1) <- rownames(bacteria_df)
+  names(p_values1) <- rownames(bacteria_df)
+  p_adjusted1 <- p.adjust(p_values1,method = "BH")
+  res_mdi1 <- data.frame(r=r_values1,
+                         p=p_values1,
+                         p_adjusted=p_adjusted1)
+  
+  names(r_values2) <- rownames(bacteria_df)
+  names(p_values2) <- rownames(bacteria_df)
+  p_adjusted2 <- p.adjust(p_values2,method = "BH")
+  res_mdi2 <- data.frame(r=r_values2,
+                         p=p_values2,
+                         p_adjusted=p_adjusted2)
+  
+  #res_mdi1 %<>% filter(p_adjusted<0.05)
+  #res_mdi2 %<>% filter(p_adjusted<0.05)
+  
+  return(list(res,res2,res_mdi1,res_mdi2))
 }
 
 is_dna_sequence <- function(sequence) {
@@ -2280,13 +2000,16 @@ is_dna_sequence <- function(sequence) {
   }
 }
 
-heatmap_correlation <- function(corrs){
-  
-}
-
 
 heatmap_linda <- function(linda.output,taxa_tab){
-
+  # Generates a heatmap showing the significant taxa in DAA with 
+  # the significance information and logfoldchange color-coding
+  # inputs:
+  # linda.output - output of linda
+  # taxa_tab - Taxonomy with 'SeqID', will be used for the row-naming
+  # outputs:
+  # p - heatmap
+  
   # Create a data frame
   linda.output <- lapply(linda.output, function(df) df[, c("padj", "log2FoldChange")])
   groups <- names(linda.output)
@@ -2392,6 +2115,15 @@ heatmap_linda <- function(linda.output,taxa_tab){
 
 dot_heatmap_linda <- function(raw_linda, uni_list,
                               taxa_table, group=NULL){
+  # Generates a dotheatmap showing the significant taxa in DAA with 
+  # the significance information, logfoldchange color-coding and abundance size-coding
+  # inputs:
+  # raw_linda - univariate statistics for this comparison (uni_statistics variable)
+  # taxa_table - Taxonomy with 'SeqID', will be used for the row-naming
+  # group - name of the group that should be visualized. If null, all groups will be plotted, default NULL
+  # outputs:
+  # p - dotheatmap
+  
   if (class(raw_linda)=="data.frame") {
     raw_linda <- raw_linda[, c("SeqID","Taxonomy","padj", "log2FoldChange","MEDIAN_clr_ALL")]
     raw_linda <- raw_linda[,c(TRUE,!grepl("ASV",colnames(raw_linda)[-1]))]
@@ -2409,13 +2141,6 @@ dot_heatmap_linda <- function(raw_linda, uni_list,
       merge(wanted_df, uni_df[, c("SeqID", "MEDIAN_clr_ALL")], by = "SeqID", all.x = TRUE)
     }, wanted_list, uni_list)
     
-    
-    # raw_linda <- lapply(wanted_list, function(df) {
-    #   df <- merge(df,uni_df[,c("SeqID","MEDIAN_clr_ALL")],by="SeqID",all.x = TRUE)
-    #   df[, c("SeqID","Taxonomy","padj", "log2FoldChange","MEDIAN_clr_ALL")]
-    #   return(df)
-    #   })
-    #raw_linda <- lapply(wanted_list, function(df) df[, c("ASV","Taxonomy","padj", "log2FoldChange","MEDIAN ALL","Taxonomy")])
     
     names(raw_linda) <- gsub("(terminal_ileum)|(colon)|(ASV)|(genus)","",names(raw_linda))
     names(raw_linda) <- gsub("^ +","",names(raw_linda))
@@ -2456,14 +2181,7 @@ dot_heatmap_linda <- function(raw_linda, uni_list,
     
     colnames(raw_linda) <- c("SeqID","Taxonomy",paste0(groups,c(":log2FoldChange",":padj",":MEDIAN_clr_ALL")))
   }
-  #raw_linda %<>% dplyr::bind_cols(.name_repair = "unique")
-  
-  #taxa_table <- taxa_table[taxa_table$SeqID %in% raw_linda$SeqID,]
-  #raw_linda$Taxonomy=create_asv_taxa_table(raw_linda,taxa_table)$SeqID
-  
-  ##########################################################################################################
-  #raw_linda[,grepl(":padj",colnames(raw_linda))][is.na(raw_linda[,grepl(":padj",colnames(raw_linda))])] <- Inf
-  #raw_linda[is.na(raw_linda)] <- 0
+
   
   or_logic <- rep(FALSE,dim(raw_linda)[1])
   for (col in grep(":padj",colnames(raw_linda))){
@@ -2574,6 +2292,9 @@ dot_heatmap_linda <- function(raw_linda, uni_list,
   if (TRUE %in% (grepl("post_LTx",plot_df_combined$Variable))){
     plot_df_combined$Variable <- factor(plot_df_combined$Variable,
                                         levels=c("pre_LTx vs HC","post_LTx vs HC","post_LTx vs pre_LTx"))
+  } else if (any(grepl("pre_LTx",plot_df_combined$Variable)) & any(grepl("rPSC",plot_df_combined$Variable))){
+    plot_df_combined$Variable <- factor(plot_df_combined$Variable,
+                                        levels=c("pre_LTx vs HC","rPSC vs non-rPSC"))
   } else {
     plot_df_combined$Variable <- factor(plot_df_combined$Variable,
                                         levels=c("non-rPSC vs HC","rPSC vs HC","rPSC vs non-rPSC"))
@@ -2601,6 +2322,15 @@ dot_heatmap_linda <- function(raw_linda, uni_list,
 }
 
 volcano_plot_linda <- function(linda.output,group,taxa_table,cutoff.pval=0.05, cutoff.lfc=1){
+  # Generates a volcano showing the significant taxa in linDA 
+  # inputs:
+  # linda.output - linda output
+  # group - name of the comparison that should be plotted
+  # taxa_table - Taxonomy with 'SeqID', will be used for the row-naming
+  # cutoff.pval - significance threshold, default 0.05
+  # cutoff.lfc - logfoldchange threshold, default 1
+  # outputs:
+  # p - volcano_plot
   
   output <- linda.output[[group]]
   #output <- output[taxa_table$SeqID,]
@@ -2620,6 +2350,9 @@ volcano_plot_linda <- function(linda.output,group,taxa_table,cutoff.pval=0.05, c
   taxa_table <- taxa_table %>% column_to_rownames("SeqID")
   if ("Genus" %in% colnames(taxa_table)){
     data_called$name <- taxa_table[data_called$name,"Genus"]
+  } 
+  else if ("Domain" %in% colnames(taxa_table)){
+    data_called$name <- taxa_table[data_called$name,"Domain"]
   } else {
     message("Using Phylum for naming")
     data_called$name <- taxa_table[data_called$name,"Phylum"]
@@ -2642,44 +2375,17 @@ volcano_plot_linda <- function(linda.output,group,taxa_table,cutoff.pval=0.05, c
   return(p)
 }
 
-volcano_plot_ancom <- function(ancom_output,taxa_table,cutoff.pval=0.05, cutoff.lfc=1){
-  
-  output <- ancom_output
-  
-  lfc <- output$LFC
-  padj <- output$p.adjusted
-  
-  called <- output[,"p.adjusted"] <= cutoff.pval
-  all.p <- output[,"p.adjusted"]
-  all.col <- rgb(0, 0, 0, 0.2)
-  
-  data_df <- data.frame(x=lfc,
-                        y=-1*log10(all.p),
-                        name=output$SeqID)
-  
-  data_called <- data_df[called,]
-  taxa_table <- taxa_table %>% column_to_rownames("SeqID")
-  data_called$name <- taxa_table[data_called$name,"Genus"]
-  
-  maximum <- max(c(abs(min(data_df$x)), abs(max(data_df$x))))
-  p <- ggplot(data=data_df, aes(x=x,y=y)) +
-    geom_point(colour=all.col, shape=19, size=3) + theme_bw() + 
-    xlab("Log"[2]~"Fold Change ") + ylab("-1 * Median Log"[10]~" q value") +
-    geom_point(data=data_called, aes(x=x,y=y), colour="red", size=3)+
-    theme(plot.title = element_text(hjust = 0.5,face = "bold",size=15),
-          axis.title=element_text(size=10)) + 
-    geom_vline(xintercept=1.5, linetype=2, colour="grey")+ 
-    geom_vline(xintercept=-1.5, linetype=2, colour="grey")+ 
-    coord_cartesian(xlim = c(-maximum,maximum), clip="on") +
-    geom_hline(yintercept=-1*log10(0.05),linetype=2, colour="grey") +
-    geom_text_repel(data=data_called, aes(x = x, y = y, 
-                                          label = name),size=2,max.overlaps = 20)
-  
-  return(p)
-}
-
 
 volcano_plot_maaslin <- function(maaslin_output,taxa_table,cutoff.pval=0.05, cutoff.lfc=1,variable="Group"){
+  # Generates a volcano showing the significant taxa in Maaslin 
+  # inputs:
+  # maaslin_output - masslin output
+  # variable - variable that should be plotted, default "Group"
+  # taxa_table - Taxonomy with 'SeqID', will be used for the row-naming
+  # cutoff.pval - significance threshold, default 0.05
+  # cutoff.lfc - logfoldchange threshold, default 1
+  # outputs:
+  # p - volcano_plot
   
   # group effect
   output <- maaslin_output$results
@@ -2723,23 +2429,33 @@ volcano_plot_maaslin <- function(maaslin_output,taxa_table,cutoff.pval=0.05, cut
 }
 
 
-
-roc_curve <- function(enet_model, group){
-  ggroc_data <- ggroc(enet_model$kfold_rocobjs)$data
+roc_curve <- function(model_object, group){
+  # Generates a ROC curve as the performance metric of a model 
+  # inputs:
+  # model_object - model object
+  # group - names of groups that were compared, e.g. c("rPSC","non-rPSC")
+  # outputs:
+  # p - roc_curve
+  
+  ggroc_data <- ggroc(model_object$kfold_rocobjs)$data
   roc_c <- ggplot(data=ggroc_data) + 
     geom_line(aes(x=`1-specificity`, y=sensitivity, by=name, color="red",alpha=0.9)) +
-    #geom_smooth(aes(x=`1-specificity`, y=sensitivity),
-    #            linewidth=1,
-    #            color = 'red',
-    #            se=FALSE,
-    #            method = 'loess') +
     theme_minimal() + 
     theme(legend.position = "none") + 
-    ggtitle(paste0('ROC Curve: ',group[1],' vs ',group[2],' (AUC = ', round(enet_model$model_summary$auc_optimism_corrected,2), ')'))  
+    ggtitle(paste0(group[1],' vs ',group[2],
+                   ' (AUC = ', round(model_object$model_summary$auc_optimism_corrected,2), 
+                   ', P = ',(mean(model_object$valid_performances$auc_validation<0.5)*2),')'))  
     return(roc_c)
 }
 
 roc_curve_all <- function(objects){
+  # Generates a ROC curve for MDI discriminative power visualization
+  # This functions will put all comparisons in one plot
+  # inputs:
+  # objects - roc_cs objects, where plain ROC information is stored
+  # outputs:
+  # p - roc_curves plot
+  
   p <- ggplot()
   colors <- c(
     "red", "blue","#2B9D2B", "#D90368",
@@ -2751,53 +2467,55 @@ roc_curve_all <- function(objects){
               "#FF6347","#FFD700","#D90368")
   
   
-  #colors <- c(
-  #  "#f6bcb7","#d8d082","#88db9c",
-  #  "#8cdee0","#b5ccfe","#f6b2f0")
-  
-
   names(colors) <- names(objects)
   
   for (i in 1:length(objects)){
     auc <- objects[[i]]$auc
-    my_df <- data.frame(sensitivity=objects[[i]]$sensitivities,
+    my_df <- data.frame(Sensitivity=objects[[i]]$sensitivities,
                         `1-specificity`=1-objects[[i]]$specificities,
                         check.names = FALSE)
-  
-      
+    
+    
     my_color <- names(colors)[i]
     p <- p + 
-    geom_line(data=my_df,aes(x=`1-specificity`, y=sensitivity, group=name,
-                                  color=!!my_color), linewidth=1.5,alpha=1) 
-
-
+      geom_line(data=my_df,aes(x=`1-specificity`, y=Sensitivity, group=name,
+                               color=!!my_color), linewidth=1.5,alpha=1) 
+    
+    
+    
   }
   p <- p + theme_minimal() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
+          axis.ticks.x = element_line(size=0.3,color = "black"),
+          axis.ticks.y = element_line(size=0.3,color="black"),
+          axis.ticks.length = unit(4,"pt"),
+          panel.grid = element_blank()) + 
+    scale_x_continuous(breaks=c(0,0.5,1)) + 
+    scale_y_continuous(breaks=c(0,0.5,1)) + 
     scale_color_manual(values = colors) + #+ guides(colour = "none") + 
-  theme(legend.title = element_blank())
+    theme(legend.title = element_blank())
   return(p)
 }
 
-
 roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
-  print(names(objects))
+  # Generates a ROC curve as the performance metric of a model
+  # This functions will put all comparisons in one plot
+  # inputs:
+  # objects - roc_cs objects, where plain ROC information is stored
+  # Q - question type, will be used for the path where model is stored (Q1/Q2/Q3)
+  # model_name - name of the model
+  # legend - boolean, if legend should be generated, default TRUE
+  # outputs:
+  # p - roc_curves plot
+  
+  #print(names(objects))
   p <- ggplot()
-  #colors <- c(
-  #  "red", "blue","#2B9D2B", "#D90368",
-  #  "#984ea3", "#FAF33E","#DF75BE", "grey",
-  #  "#17BACB", "#66c2a5","#A5BE00", "#000000",
-  #  "#a65629")
-  
-  #colors <- c(
-  #  "#708090", "#17BACB","#FFA500", "#7B68EE",
-  #  "#FF6347", "#F0E68C","#708090")
-  
-  #colors <- c("#FF6347","#556B2F","#7B68EE","#17BACB","#708090","#FFA500")
   
   if (grepl("^Q1", Q)) colors <- c("#FF6347","#708090","#17BACB")
   if (grepl("^Q2",Q)) {
     #colors <- c("#FF7F50","#FFD700","#4169E1","#008080") 
-    colors <- c("#008080","#FFD700","#4169E1","#FF7F50")
+    #colors <- c("#008080","#FFD700","#4169E1","#FF7F50")
+    colors <- c("#008080","#FF7F50")
   }
   if (grepl("^Q3",Q)) {
     #\colors <- c("#FF7F50","#FFD700","#4169E1","#008080") 
@@ -2828,9 +2546,7 @@ roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
     #b <- objects[[i]][[min_auc]]
     c <- objects[[i]][[true_auc]]
     ggroc_data_c <- ggroc(c)$data
-    #y3_interp <- approx(ggroc_data_c$`1-specificity`, ggroc_data_c$sensitivity, xout = x_common)$y
-    
-    ############################################
+
     # Create a common set of x-axis points
     x_common <- seq(0, 1, length.out = 100)
     
@@ -2856,37 +2572,20 @@ roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
                      y2 = q3_y, 
                      y3 = q2_y)
     df[is.na(df)] <- 0
-    ##########################################################
-    # Interpolate y-values for both lines
-    #y1_interp <- approx(ggroc_data_a$`1-specificity`, ggroc_data_a$sensitivity, xout = x_common)$y
-    #y2_interp <- approx(ggroc_data_b$`1-specificity`, ggroc_data_b$sensitivity, xout = x_common)$y
-    #y3_interp <- approx(ggroc_data_c$`1-specificity`, ggroc_data_c$sensitivity, xout = x_common)$y
-    
-    #df <- data.frame(x = x_common, 
-    #                 y1 = y1_interp, 
-    #                 y2 = y2_interp, 
-    #                 y3 = y3_interp)
     
     my_color <- colors[i]
     
-    #p <- p + 
-    #geom_line(data=ggroc_data,aes(x=`1-specificity`, y=sensitivity, group=name,
-    #                              color=!!my_color), linewidth=2,alpha=0.7) +
-    #geom_ribbon(data = bounds, aes(x, ymin = ymin, ymax = ymax, fill = fill), alpha = 0.4) 
-    #geom_smooth(data=ggroc_data,aes(x=`1-specificity`, y=sensitivity,color = !!my_color),
-    #            linewidth=1,
-    #            se=FALSE,
-    #            method = 'loess')
     p <- p + 
       #  geom_line(data=df,aes(x=x,y = y1,color=!!my_color)) +
-      geom_ribbon(data=df,aes(x =x,ymin = pmin(y1, y2), ymax = pmax(y1, y2)), fill=my_color, alpha = 0.5,show.legend = TRUE) +
+      geom_ribbon(data=df,aes(x =x,ymin = pmin(y1, y2), ymax = pmax(y1, y2)), fill=my_color, 
+                  alpha = 0.5,show.legend = TRUE) +
       #geom_line(data=df,aes(x=x, y = y3),color=my_color,size=1.5) +
-      theme_classic() + 
+      theme_minimal() + 
       theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
-            axis.title.x = element_text(size=5),
-            axis.text.x = element_text(size=5),
-            axis.title.y = element_text(size=5),
-            axis.text.y = element_text(size=5)) + 
+            panel.grid = element_blank(),
+            axis.ticks.x = element_line(size=0.3,color = "black"),
+            axis.ticks.y = element_line(size=0.3,color="black"),
+            axis.ticks.length = unit(4,"pt")) + 
       ylab("Sensitivity") + xlab("1-specificity")
   }
   for (i in 1:length(objects)){
@@ -2913,7 +2612,6 @@ roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
     ggroc_data_c <- ggroc(c)$data
     y3_interp <- approx(ggroc_data_c$`1-specificity`, ggroc_data_c$sensitivity, xout = x_common)$y
     
-    ############################################
     # Create a common set of x-axis points
     x_common <- seq(0, 1, length.out = 100)
     
@@ -2939,37 +2637,19 @@ roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
                      y2 = q3_y, 
                      y3 = q2_y)
     df[is.na(df)] <- 0
-    ##########################################################
-    # Interpolate y-values for both lines
-    #y1_interp <- approx(ggroc_data_a$`1-specificity`, ggroc_data_a$sensitivity, xout = x_common)$y
-    #y2_interp <- approx(ggroc_data_b$`1-specificity`, ggroc_data_b$sensitivity, xout = x_common)$y
-    #y3_interp <- approx(ggroc_data_c$`1-specificity`, ggroc_data_c$sensitivity, xout = x_common)$y
-    
-    #df <- data.frame(x = x_common, 
-    #                 y1 = y1_interp, 
-    #                 y2 = y2_interp, 
-    #                 y3 = y3_interp)
     
     my_color <- colors[i]
     
-    #p <- p + 
-    #geom_line(data=ggroc_data,aes(x=`1-specificity`, y=sensitivity, group=name,
-    #                              color=!!my_color), linewidth=2,alpha=0.7) +
-    #geom_ribbon(data = bounds, aes(x, ymin = ymin, ymax = ymax, fill = fill), alpha = 0.4) 
-    #geom_smooth(data=ggroc_data,aes(x=`1-specificity`, y=sensitivity,color = !!my_color),
-    #            linewidth=1,
-    #            se=FALSE,
-    #            method = 'loess')
     p <- p + 
-      #  geom_line(data=df,aes(x=x,y = y1,color=!!my_color)) +
-      #geom_ribbon(data=df,aes(x =x,ymin = pmin(y1, y2), ymax = pmax(y1, y2)), fill=my_color, alpha = 0.5,show.legend = TRUE) +
-      geom_line(data=df,aes(x=x, y = y3),color=my_color,size=1) +
-      theme_classic() + 
+      geom_line(data=df,aes(x=x, y = y3),color=my_color,size=1.5) +
+      theme_minimal() + 
       theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
-            axis.title.x = element_text(size=5),
-            axis.text.x = element_text(size=5),
-            axis.title.y = element_text(size=5),
-            axis.text.y = element_text(size=5)) + 
+            axis.ticks.x = element_line(size=0.3,color = "black"),
+            axis.ticks.y = element_line(size=0.3,color="black"),
+            axis.ticks.length = unit(4,"pt"), 
+            panel.grid = element_blank()) + 
+      #scale_x_continuous(breaks=c(0,0.25,0.5,0.75,1)) + 
+      #scale_y_continuous(breaks=c(0,0.25,0.5,0.75,1)) + 
       ylab("Sensitivity") + xlab("1-specificity")
   }
   
@@ -3017,90 +2697,148 @@ roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
   return(p)
 }
 
+## DAA functions ----
 
-## ANCOM functions ----
-
-ancom_analysis <- function(asv_table,taxa_table,metadata, fix_formula="",random_formula=NULL,
-                           prv_cut=0.0,lib_cut=0,s0_perc=0){
-  if (FALSE %in% ("SeqID" %in% colnames(asv_table))) asv_table %<>% rownames_to_column("SeqID")
-  if (FALSE %in% ("SampleID" %in% colnames(metadata))) metadata %<>% rownames_to_column("SampleID")
-  phyloseq_for_ancom <- construct_phyloseq(asv_table,taxa_table,metadata)
-  output <- ANCOMBC::ancombc2(data = phyloseq_for_ancom,
-                              fix_formula = fix_formula, rand_formula = NULL,
-                              p_adj_method = "BH", pseudo_sens = TRUE,
-                              prv_cut = prv_cut, lib_cut = lib_cut, s0_perc = s0_perc,
-                              group = "Group",
-                              alpha = 0.05, verbose = TRUE,
-                              mdfdr_control = list(fwer_ctrl_method = "BH", B = 100))
-  #tryCatch(
-  #  output <- ANCOMBC::ancombc2(data = phyloseq_for_ancom,
-  #                    fix_formula = fix_formula, rand_formula = NULL,
-  #                    p_adj_method = "BH", pseudo_sens = TRUE,
-  #                    prv_cut = prv_cut, lib_cut = lib_cut, s0_perc = s0_perc,
-  #                    group = "Group",
-  #                    alpha = 0.05, verbose = TRUE,
-  #                    mdfdr_control = list(fwer_ctrl_method = "BH", B = 100)),
-  #  error = function(cnd) {
-  #    bad_taxa <- strsplit(conditionMessage(cnd), "\n")[[c(1L, 2L)]]
-  #    bad_taxa <- .subset2(strsplit(bad_taxa, ", "), 1L)
-  #    return(bad_taxa)
-  #  }
-  #)
-  #return(bad_taxa)
-
+group_intersection <- function(group, list_intersections, list_venns,
+                               linda.output1, fit_data,
+                               raw_linda_results, segment,level){
+  # Performs an intersection between linda and maaslin
+  # inputs:
+  # group - names of groups that were compared, e.g. c("rPSC","non-rPSC")
+  # list_intersections - list for storing the intersection taxa
+  # list_venns - list for storing the venn diagrams
+  # linda.output1 - linda output
+  # fit_data - maaslin output
+  # raw_linda_results - linda output with univariate statistics
+  # segment - terminal_ileum/colon
+  # level - ASV/genus/phylum or other
+  # outputs:
+  # (list(list_intersections,list_venns,venn))
   
-  result <- output$res[,c(TRUE,grepl("Group",colnames(output$res))[-1])]
-  colnames(result) <- c("SeqID","LFC","SE","w","p.value","p.adjusted",
-                        "significance","passed_ss")
-  return(result)
+  list_core <- list()
+  linda_df <- linda.output1[[paste0(group[1]," vs Group",group[2])]]
+  list_core[["linDA"]] <- rownames(linda_df[linda_df$padj <= 0.05,])
+  
+  maaslin_df <- fit_data$results[fit_data$results$metadata=="Group",]
+  list_core[["MaAsLin2"]] <- maaslin_df[maaslin_df$qval <= 0.05,"feature"]
+  
+  diff <- intersect(list_core[[1]],list_core[[2]])
+  orig <- raw_linda_results[[segment]][[paste0(group[1]," vs Group",group[2])]]
+  diff <- orig[orig$SeqID %in% diff,]
+  
+  #if (segment == "terminal_ileum") segment <- "Ileum"
+  list_intersections[[paste(segment,level,paste(group, collapse = " vs "))]] <- diff
+  
+  # venn diagram
+  venn <- ggvenn(list_core, fill_color = c("blue", "red")) + 
+    ggtitle(paste(segment,level,paste(group, collapse = " vs "))) + 
+    guides(fill = "none")
+  
+  # save the results
+  list_venns[[paste(segment,level,paste(group, collapse = " vs "))]] <- venn
+  
+  # show the results
+  return(list(list_intersections,list_venns,venn))
 }
 
-raw_ancom.df <- function(ancom_output,uni_data,uni_taxa){
+country_interaction <- function(group,linda.output1,list_intersections, 
+                                uni_data, uni_metadata,
+                                segment, level){
+  # Finds a significant interaction effect in linDA output and removes them
+  # inputs:
+  # group - names of groups that were compared, e.g. c("rPSC","non-rPSC")
+  # list_intersections - list for storing the intersection taxa
+  # linda.output1 - linda output
+  # uni_data - ASV table used in DAA
+  # uni_metadata - metadata with 'SampleID' identifier
+  # segment - terminal_ileum/colon
+  # level - ASV/genus/phylum or other
+  # outputs:
+  # (list(intersection_significant,linda_czech_interaction_significant,linda_no_interaction_significant))
+  # - significant interaction effect in intersection list
   
-  if (is_dna_sequence(rownames(uni_data)[1])) {
-  raw_ancom_result <- data.frame(
-    ASV=ancom_output$SeqID,
-    Taxonomy=create_asv_taxa_table(uni_data[ancom_output$SeqID,] %>% rownames_to_column("SeqID"),uni_taxa)$SeqID,
-    log2FoldChange=ancom_output$LFC,
-    p_value=ancom_output$p.value,
-    padj=ancom_output$p.adjusted)
-  } else {
-    raw_ancom_result <- data.frame(
-      ASV=ancom_output$SeqID,
-      log2FoldChange=ancom_output$LFC,
-      p_value=ancom_output$p.value,
-      padj=ancom_output$p.adjusted)
+  interaction_significant_df <- linda.output1[[paste0(group[1]," vs Group",group[2],":CountryNO")]]
+  interaction_significant_df <- interaction_significant_df[interaction_significant_df$padj<0.05,]
+  
+  group_significant_df <- list_intersections[[paste(segment,level, group[1],"vs",group[2])]]
+  
+  intersection_significant <- intersect(rownames(interaction_significant_df),group_significant_df$ASV)
+  
+  linda_czech_interaction_significant <- NA
+  linda_no_interaction_significant <- NA
+  
+  if (length(intersection_significant)>0){
+    # Subset the data by country
+    uni_metadata_czech <- subset(uni_metadata, Country == "CZ")
+    uni_metadata_no <- subset(uni_metadata, Country == "NO")
+    
+    uni_data_czech <- uni_data[,rownames(uni_metadata_czech)]
+    uni_data_no <- uni_data[,rownames(uni_metadata_no)]
+    
+    # Run linDA for each subset
+    if (segment=="terminal_ileum"){
+      linda_czech <- linda(uni_data_czech , uni_metadata_czech, formula = '~ Group')
+      linda_no <- linda(uni_data_no, uni_metadata_no, formula = '~ Group')
+    } else if (segment=="colon"){
+      linda_czech <- linda(uni_data_czech , uni_metadata_czech, formula = '~ Group + (1|Patient)')
+      linda_no <- linda(uni_data_no, uni_metadata_no, formula = '~ Group + (1|Patient)')
+      
+    } else cat("Problem with segment!\n")
+    
+    linda_czech_interaction_significant <- linda_czech$output[[1]][intersection_significant,]
+    linda_no_interaction_significant <- linda_no$output[[1]][intersection_significant,]
   }
   
-  return(raw_ancom_result)
+  return(list(intersection_significant,linda_czech_interaction_significant,linda_no_interaction_significant))
 }
 
-raw_maaslin.df <- function(fit_data,uni_data,uni_taxa){
-  fit_data <- fit_data$results
-  fit_data <- fit_data[fit_data$metadata=="Group",c(1,4,5,6,8)]
-
-  if (is_dna_sequence(rownames(uni_data)[1])) {
-    raw_maaslin_result <- data.frame(
-      ASV=fit_data$feature,
-      Taxonomy=create_asv_taxa_table(uni_data[fit_data$feature,] %>% rownames_to_column("SeqID"),uni_taxa)$SeqID,
-      coef=fit_data$coef,
-      p_value=fit_data$pval,
-      padj=fit_data$qval)
-  } else {
-    raw_maaslin_result <- data.frame(
-      ASV=fit_data$feature,
-      coef=fit_data$coef,
-      p_value=fit_data$pval,
-      padj=fit_data$qval)
-  }
+removing_interaction_problems <- function(group,
+                                          list_interaction_significant,
+                                          list_intersections,
+                                          segment, level){
   
-  return(raw_maaslin_result)
+  # Removes unsuitable significant taxa from DAA results, only ones with the same direction in 
+  # both directions should be retained.
+  # inputs:
+  # group - names of groups that were compared, e.g. c("rPSC","non-rPSC")
+  # list_intersection_significant - list with problematic taxa, output of country_interaction()
+  # list_intersections - original list with the intersection of linda and maaslin, created by group_intersection()
+  # segment - terminal_ileum/colon
+  # level - ASV/genus/phylum or other
+  # outputs:
+  # list_intersections - final significant taxa
+  
+  to_investigate <- list_interaction_significant[[1]]
+  to_remove <- c()
+  
+  if (length(to_investigate)>0){
+    for (taxon in to_investigate){
+      cz <- list_interaction_significant[[2]][taxon,c("log2FoldChange","reject")]
+      no <- list_interaction_significant[[3]][taxon,c("log2FoldChange","reject")]
+      if (! (((cz[,1]>0)==(no[,1]>0)) & cz[,2] & no[,2]) ) to_remove <- c(to_remove,taxon)
+    }
+    
+    if (length(to_remove)>0){
+      df_to_change <- list_intersections[[paste(segment,level, group[1],"vs",group[2])]]
+      df_to_change <- df_to_change[!(rownames(df_to_change)%in%to_remove),]
+      list_intersections[[paste(segment,level, group[1],"vs",group[2])]] <- df_to_change
+    }
+    
+    list_intersections <- lapply(list_intersections, function (x) remove_rownames(x))
+  }
+  rownames(list_intersections) <- NULL
+  return(list_intersections)
 }
-
-
-## linDA functions ----
-
 rawlinda.df <- function(linda.output,group,uni_data,uni_taxa){
+  # creates a dataframe from raw linda output
+  # inputs:
+  # linda.output - linda output
+  # group - names of groups that were compared, e.g. c("rPSC","non-rPSC")
+  # uni_data - dataframe used for DAA
+  # uni_taxa - taxonomy with 'SeqID' column
+  # outputs:
+  # raw_linda_result - dataframe generated from linda.output (all taxa included)
+  
   if (is_dna_sequence(rownames(uni_data)[1])) {
   raw_linda_result <- data.frame(
     SeqID=rownames(linda.output[[group]]),
@@ -3122,11 +2860,24 @@ rawlinda.df <- function(linda.output,group,uni_data,uni_taxa){
 }
 
 linda.df <- function(linda.output,group,filt_ileum_uni_data,filt_ileum_uni_taxa){
-  filt_ileum_uni_taxa <- filt_ileum_uni_taxa %>% column_to_rownames("SeqID")
+  # Similar function to rawlinda.df, but here only significant taxa are stored
+  # inputs:
+  # linda.output - linda output
+  # group - names of groups that were compared, e.g. c("rPSC","non-rPSC")
+  # uni_data - dataframe used for DAA
+  # uni_taxa - taxonomy with 'SeqID' column
+  # outputs:
+  # linda_result - dataframe generated from linda.output (only significant taxa included)
+  
+  if (ncol(filt_ileum_uni_taxa)==2){
+    seq_ids <- filt_ileum_uni_taxa$SeqID
+    filt_ileum_uni_taxa <- data.frame(Domain=filt_ileum_uni_taxa$Domain) %>% `row.names<-`(seq_ids)
+  } else filt_ileum_uni_taxa <- filt_ileum_uni_taxa %>% column_to_rownames("SeqID")
   diff_asvs <- rownames(linda.output[[group]])[linda.output[[group]]$padj < 0.05]
   
   # save the results
-  linda_result <- data.frame(
+  if (length(diff_asvs)>0){
+    linda_result <- data.frame(
     ASVs=diff_asvs,
     Taxonomy=create_asv_taxa_table(
       filt_ileum_uni_data[diff_asvs,] %>% rownames_to_column("SeqID"),
@@ -3134,6 +2885,8 @@ linda.df <- function(linda.output,group,filt_ileum_uni_data,filt_ileum_uni_taxa)
     log2FoldChange=linda.output[[group]][diff_asvs,"log2FoldChange"],
     pvalue=linda.output[[group]][diff_asvs,"pvalue"],
     padj=linda.output[[group]][diff_asvs,"padj"])
+  } else linda_result <- NULL
+  
   
   return(linda_result)
 }
@@ -3165,57 +2918,9 @@ linda_renaming <- function(linda_data, group){
   return(linda_data)
 }
 
-binomial_statistics <- function(uni_data, uni_metadata, raw_linda_results,group=NULL,segment){
-  # CLR statistics
-  data_clr <- vegan::decostand(uni_data,method = "clr", MARGIN = 2, pseudocount=0.5) %>% as.matrix()
-  #data_clr <- as.data.frame(apply(uni_data, 2, function(x) x / sum(x)))
-  groups <- unique(uni_metadata$Group)
-  if (!is.null(group)) groups <- group
-  # group1
-  group1 <- data_clr[,colnames(data_clr) %in% rownames(uni_metadata)[uni_metadata$Group == groups[1]]]
-  res <- apply(group1, 1, function(x) {
-    quantile(x, probs = c(0.25,0.5,0.75))
-  }) %>% t() %>% 
-    `colnames<-`(c(paste("Q1",groups[1]),paste("MEDIAN",groups[1]),paste("Q3",groups[1]))) %>% 
-    as.data.frame()
-  
-  group2 <- data_clr[,colnames(data_clr) %in% rownames(uni_metadata)[uni_metadata$Group == groups[2]]]
-  res <- cbind(res,apply(group2, 1, function(x) {
-    quantile(x, probs = c(0.25,0.5,0.75))
-  }) %>% t() %>% 
-    `colnames<-`(c(paste("Q1",groups[2]),paste("MEDIAN",groups[2]),paste("Q3",groups[2]))) %>% 
-    as.data.frame())
-  
-  
-  # reordering
-  #res <- res[,c(grep("Q1",colnames(res)),grep("MEDIAN",colnames(res)),grep("Q3",colnames(res)))]
-  if (class(raw_linda_results[[segment]])=="data.frame"){
-    raw_linda_result <- raw_linda_results[[segment]]
-  } else{
-    raw_linda_result <- (raw_linda_results[[segment]][[paste0(groups[1]," vs ","Group",groups[2])]])
-  }
-  if (is.null(raw_linda_result$Taxonomy)) t <- NA
-  else t <- raw_linda_result$Taxonomy
-  res <- cbind(ASV=raw_linda_result$ASV,
-               Taxonomy=t,
-               log2FoldChange=raw_linda_result$log2FoldChange,
-               padj=raw_linda_result$padj,
-               res)
-  res["MEDIAN ALL"] <- apply(data_clr,1,median)
-  res["Cliffs_delta"] <- cliffs_delta(data_clr,uni_metadata, group) 
-  
-  
-  # save the results
-  if (class(raw_linda_results[[segment]])=="data.frame"){
-    raw_linda_results[[segment]] <- res
-  } else {
-    raw_linda_results[[segment]][[paste0(groups[1]," vs ","Group",groups[2])]] <- res
-  }
-  return(raw_linda_results)
-}
+cliffs_delta <- function(data,metadata, groups){
+  # This function calculates the cliffs_delta
 
-cliffs_delta <- function(data,metadata, group){
-  groups <- group
   group1_data <- data[,metadata$Group == groups[1]]
   group2_data <- data[,metadata$Group == groups[2]]
   print(groups[1])
@@ -3232,8 +2937,13 @@ cliffs_delta <- function(data,metadata, group){
   
 }
 
-
 basic_univariate_statistics <- function(uni_data, group=NULL){
+  # Calculates basic univariate statistics (clr as well as ra) for each taxon in the dataset
+  # inputs:
+  # uni_data - list(asv_table,taxa_table,metadata)
+  # outputs:
+  # df - dataframe with Q1, median, Q3, prevalence etc.
+  
   asv_table <- uni_data[[1]]
   taxa_table <- uni_data[[2]]
   metadata <- uni_data[[3]]
@@ -3310,13 +3020,12 @@ basic_univariate_statistics <- function(uni_data, group=NULL){
   
   # taxonomy
   res %<>% rownames_to_column("SeqID")
-  #res <- merge(res %>% rownames_to_column("SeqID"),taxa_table,by="SeqID",all = TRUE)
-  
+
   return(res)
 }
 
 
-## glmnet functions ----
+## Machine learning functions ----
 glmnet_binomial <- function(data,
                             outcome,
                             sample_method = 'atypboot',
@@ -3330,6 +3039,30 @@ glmnet_binomial <- function(data,
                             file=NULL,
                             Q=NULL) {
   
+  # Fits a GLMNET model to pre-prepared dataset by binomial_prep(usage="ml_clr/ra")
+  # inputs:
+  # data - prepared dataframe using binomial_prep(), contains only two groups
+  # outcome - vector of outcome (labels)
+  # sample_method - atypboot - out-of-sample boostrap
+  # clust_var, name of clustering variable (here, it can be Patient), default NULL
+  # N, number of bootstrap samples, default 10 (minimum 100 needed for reportable results)
+  # alphas - vector of alpha values to test in glmnet, default seq(0, 1, by = 0.2)
+  # family - A string specifying the family for the GLMNET model, default 'binomial'
+  # overfitting_check - boolean, if random labels reshuffling should be performed, default FALSE
+  # seed - random seed for reproducibility, default 123
+  # reuse - boolean, should model just be reloaded?, default FALSE
+  # file - name of the file for loading the pre-trained model
+  # Q - analysis question - Q1/Q2/Q3..
+  # outputs: 
+  # enet_model - list(model_summary,valid_performances,
+  #                   valid_performance,
+  #                   predictions, 
+  #                   betas,
+  #                   conf_matrices,
+  #                   roc_curve,
+  #                   kfold_roc_curves,
+  #                   calibration_plot, 
+  #                   trained_model)
   
   logit <- function(x){log(x/(1-x))}
   inv_logit <- function(x){exp(x)/(1+exp(x))}
@@ -3713,8 +3446,7 @@ sampler <- function(data, outcome,
   
  if (sample_method == 'atypboot') {
     unique_ids <- unique(data$id)
-    id_groups <- sample(rep(1:N, length.out = length(unique_ids)))
-    
+
     train_data <- list()
     valid_data <- list()
     
@@ -3743,7 +3475,6 @@ sampler <- function(data, outcome,
 
 }
 
-## Machine learning functions ----
 gbm_binomial <- function(data,
                          outcome,
                          sample_method = 'atypboot',
@@ -3755,6 +3486,26 @@ gbm_binomial <- function(data,
                          reuse=FALSE,
                          file=NULL,
                          Q=NULL) {
+  # Fits a Gboost model to dataset prepared by binomial_prep(usage="ml_clr/ra")
+  # inputs:
+  # data - prepared dataframe using binomial_prep(), contains only two groups
+  # outcome - vector of outcome (labels)
+  # sample_method - atypboot - out-of-sample boostrap
+  # clust_var, name of clustering variable (here, it can be Patient), default NULL
+  # N, number of bootstrap samples, default 10 (minimum 100 needed for reportable results)
+  # family - A string specifying the family for the GLMNET model, default 'binomial'
+  # overfitting_check - boolean, if random labels reshuffling should be performed, default FALSE
+  # seed - random seed for reproducibility, default 123
+  # reuse - boolean, should model just be reloaded?, default FALSE
+  # file - name of the file for loading the pre-trained model
+  # Q - analysis question - Q1/Q2/Q3..
+  # outputs: 
+  # gbm_model - list(model_summary,valid_performances,
+  #                   valid_performance,
+  #                   predictions, 
+  #                   roc_curve,
+  #                   kfold_roc_curves,
+  #                   trained_model)
   
   #n.trees, interaction.depth, shrinkage, n.minobsinnode
   if (all(data[,1] >= 0 & data[,1] <= 1)) ra = TRUE
@@ -4034,6 +3785,27 @@ knn_binomial <- function(data,
                          file=NULL,
                          Q=NULL) {
   
+  # Fits a kNN model to dataset prepared by binomial_prep(usage="ml_clr/ra")
+  # inputs:
+  # data - prepared dataframe using binomial_prep(), contains only two groups
+  # outcome - vector of outcome (labels)
+  # sample_method - atypboot - out-of-sample boostrap
+  # clust_var, name of clustering variable (here, it can be Patient), default NULL
+  # N, number of bootstrap samples, default 10 (minimum 100 needed for reportable results)
+  # family - A string specifying the family for the GLMNET model, default 'binomial'
+  # overfitting_check - boolean, if random labels reshuffling should be performed, default FALSE
+  # seed - random seed for reproducibility, default 123
+  # reuse - boolean, should model just be reloaded?, default FALSE
+  # file - name of the file for loading the pre-trained model
+  # Q - analysis question - Q1/Q2/Q3..
+  # outputs: 
+  # knn_model - list(model_summary,valid_performances,
+  #                   valid_performance,
+  #                   predictions, 
+  #                   roc_curve,
+  #                   kfold_roc_curves,
+  #                   trained_model)
+  
   if (all(data[,1] >= 0 & data[,1] <= 1)) ra = TRUE
   else  ra = FALSE
   
@@ -4272,12 +4044,12 @@ knn_binomial <- function(data,
   
 }
 
+
 rf_binomial <- function(data,
                          outcome,
                          sample_method = 'atypboot',
                          clust_var=NULL,
                          N = 10, # number of bootstrap datasets
-                         alphas = seq(0, 1, by = 0.2),
                          family = 'binomial',
                          overfitting_check=FALSE,
                          seed = 123,
@@ -4285,7 +4057,27 @@ rf_binomial <- function(data,
                          file=NULL,
                          Q=NULL) {
 
-  # https://topepo.github.io/caret/train-models-by-tag.html#random-forest
+  # Fits a Gboost model to dataset prepared by binomial_prep(usage="ml_clr/ra")
+  # inputs:
+  # data - prepared dataframe using binomial_prep(), contains only two groups
+  # outcome - vector of outcome (labels)
+  # sample_method - atypboot - out-of-sample boostrap
+  # clust_var, name of clustering variable (here, it can be Patient), default NULL
+  # N, number of bootstrap samples, default 10 (minimum 100 needed for reportable results)
+  # family - A string specifying the family for the GLMNET model, default 'binomial'
+  # overfitting_check - boolean, if random labels reshuffling should be performed, default FALSE
+  # seed - random seed for reproducibility, default 123
+  # reuse - boolean, should model just be reloaded?, default FALSE
+  # file - name of the file for loading the pre-trained model
+  # Q - analysis question - Q1/Q2/Q3..
+  # outputs: 
+  # rf_model - list(model_summary,valid_performances,
+  #                   valid_performance,
+  #                   predictions, 
+  #                   roc_curve,
+  #                   kfold_roc_curves,
+  #                   trained_model)
+  
   if (all(data[,1] >= 0 & data[,1] <= 1)) ra = TRUE
   else  ra = FALSE
   
@@ -4296,10 +4088,12 @@ rf_binomial <- function(data,
   if (reuse){
     if (ra) {
       if (overfitting_check) load(file.path("../intermediate_files/models_overfitting_check/",Q,file,"rf_model_ra.RData"))
-      load(file.path("../intermediate_files/models/",Q,file,"rf_model_ra.RData"))
+      else load(file.path("../intermediate_files/models/",Q,file,"rf_model_ra.RData"))
     } else {
-      if (overfitting_check) load(file.path("../intermediate_files/models_overfitting_check/",Q,file,"rf_model.RData"))
-      load(file.path("../intermediate_files/models/",Q,file,"rf_model.RData"))
+      if (overfitting_check) {
+        load(file.path("../intermediate_files/models_overfitting_check/",Q,file,"rf_model.RData"))
+      }
+      else load(file.path("../intermediate_files/models/",Q,file,"rf_model.RData"))
     }
   } else {
     set.seed(seed)
@@ -4540,357 +4334,432 @@ rf_binomial <- function(data,
   return(rf_model)
 }
 
-# other --------------
-umap_plot_other <- function(asv_table,metadata, distance="robust.aitchison",neighbors=10,
-                      min_dist=0.1,by=NULL){
-  custom.config <- umap.defaults
-  custom.config$random_state <- 123
-  custom.config$n_neighbors <- neighbors
-  custom.config$min_dist <- min_dist
+# Clinical analysis ------------------
+
+ordiArrowMul_custom <- function (x, ord, at = c(0,0), fill = 0.75,
+                                 display, choices = c(1,2)) {
+  if (length(x$factors)>0) X <- do.call(rbind,scores(x,c("vectors", "factors")))
+  else X <- scores(x,c("vectors"))
+  u <- c(0,max(abs(range(ord$vectors[,1]))),0,max(abs(range(ord$vectors[,2]))))
   
-  r.dist <- as.matrix(vegdist(t(asv_table %>% column_to_rownames("SeqID")), method=distance))
-  umap_plot <- umap(r.dist,input="dist",config=custom.config)
-  data_umap <- data.frame(umap_plot$layout)
-  data_umap <- merge(data_umap %>% rownames_to_column("SampleID"),metadata,by="SampleID")
-  if ("Country" %in% colnames(data_umap)){
-    p <- ggplot(data=data_umap, aes(x=X1,y=X2,color=Platform)) + geom_point() + theme_bw() +
-      xlab("UMAP 1") + ylab("UMAP 2") + 
-      scale_color_manual(values=c("#f17d72", "#3bb4c4"))
+  u <- u - rep(at, each = 2)
+  r <- c(range(X[,1], na.rm = TRUE), range(X[,2], na.rm = TRUE))
+  ## 'rev' takes care of reversed axes like xlim(1,-1)
+  rev <- sign(diff(u))[-2]
+  if (rev[1] < 0)
+    u[1:2] <- u[2:1]
+  if (rev[2] < 0)
+    u[3:4] <- u[4:3]
+  u <- u/r
+  u <- u[is.finite(u) & u > 0]
+  return(fill * min(u))
+}
+
+
+dysbiosis_index_calculation <- function(my_table, metadata_table, 
+                                        psc_increased,
+                                        psc_decreased,
+                                        name){
+  # Calculates the microbial dysbiosis index (MDI) on relative abundances
+  # inputs:
+  # my_table - ASV table with 'SeqID'
+  # metadata_table - metadadata with 'SampleID'
+  # psc_increased - names of increased taxa in PSC
+  # psc_descread - names of decreased taxa in PSCA
+  # name - string indicating which index to calculate (e.g. dys_unfiltered_asv)
+  # output: 
+  # dysbiosis_data - dataframe with MDI column
+  
+  my_table <- my_table %>% column_to_rownames("SeqID")
+  
+  dysbiosis_data <- data.frame()
+  for (i in 1:ncol(my_table)){
+    SampleID <- colnames(my_table)[i]
+    PatientID <- metadata_table[metadata_table$SampleID==SampleID,"Patient"]
+    abundances <- my_table[,i]/sum(my_table[,i])
+    names(abundances) <- rownames(my_table)
+    abundances_psc_increased <- sum(abundances[psc_increased])
+    abundances_psc_decreased <- sum(abundances[psc_decreased])
     
+    if (abundances_psc_increased==0) abundances_psc_increased <- 1e-20
+    if (abundances_psc_decreased==0) abundances_psc_decreased <- 1e-20
+    dys_index <- log(abundances_psc_increased/abundances_psc_decreased)
+    dysbiosis_data <- rbind(dysbiosis_data,data.frame(SampleID,PatientID,dys_index))
+  }
+  colnames(dysbiosis_data) <- c("SampleID","PatientID",name)
+  return(dysbiosis_data)
+}
+
+dysbiosis_index_calculation_clr <- function(my_table, metadata_table, 
+                                            psc_increased,
+                                            psc_decreased,
+                                            name){
+  # Similar function to dysbiosis_index_calculation(), but this is for CLR-trasformed data
+  
+  my_table <- my_table %>% column_to_rownames("SeqID")
+  data_clr <- vegan::decostand(my_table,method = "clr", MARGIN = 2,pseudocount=0.5) %>% as.matrix()
+  
+  dysbiosis_data <- data.frame()
+  for (i in 1:ncol(my_table)){
+    SampleID <- colnames(my_table)[i]
+    PatientID <- metadata_table[metadata_table$SampleID==SampleID,"Patient"]
+    abundances <- data_clr[,i]
+    names(abundances) <- rownames(my_table)
+    abundances_psc_increased <- sum(abundances[psc_increased])
+    abundances_psc_decreased <- sum(abundances[psc_decreased])
+    
+    dys_index <- abundances_psc_increased - abundances_psc_decreased
+    dysbiosis_data <- rbind(dysbiosis_data,data.frame(SampleID,PatientID,dys_index))
+  }
+  colnames(dysbiosis_data) <- c("SampleID","PatientID",name)
+  return(dysbiosis_data)
+}
+
+
+clinical_boxplot <- function(metadata,variable){
+  # Creates boxplot for clinical variables
+  # inputs:
+  # metadata - metadata dataframe with 'SampleID'
+  # variable - name of variable to be plotted
+  
+  if (!("PSC_IBD" %in% colnames(metadata))){
+    metadata_var <- metadata %>% 
+      dplyr::select(all_of(c("PatientID",variable, "Group","Country"))) %>% 
+      as.data.frame()
+    
+    metadata_var[,variable] <- as.numeric(metadata_var[,variable])
+    metadata_var_without_na <- metadata_var[!is.na(metadata_var[,variable]),]
+    
+    colors <- c("#309f87","#f9c675","#F08080","#A00000")
+    if (length(unique(metadata_var_without_na$Group))==1) colors <- c("#f9c675")
+    if (!"healthy" %in% tolower(unique(metadata_var_without_na$Group))) {
+      if ("rpsc" %in% tolower(unique(metadata_var_without_na$Group))) colors <- c("#f9c675","#F08080","#A00000")
+      else colors <- c("#f9c675","#425387")
+    }  else if (("rpsc" %in% tolower(unique(metadata_var_without_na$Group))) &
+             (!"pre_ltx" %in% tolower(unique(metadata_var_without_na$Group)))) {
+      colors <- c("#309f87","#F08080","#A00000")
+    } else if (("pre_ltx" %in% tolower(unique(metadata_var_without_na$Group))) &
+               ("post_ltx" %in% tolower(unique(metadata_var_without_na$Group)))) {
+      colors <- c("#309f87","#f9c675","#425387")
+    }
   } else {
-    p <- ggplot(data=data_umap, aes(x=X1,y=X2,color=Platform)) + geom_point() + theme_bw() +
-      xlab("UMAP 1") + ylab("UMAP 2") + 
-      scale_color_manual(values=c("#f17d72", "#3bb4c4"))
+    metadata_var <- metadata %>% dplyr::select(all_of(c("PatientID",
+                                                       variable, "PSC_IBD","Country"))) %>% 
+      as.data.frame() %>%
+      dplyr::mutate(Group=PSC_IBD)
+    metadata_var[,variable] <- as.numeric(metadata_var[,variable])
+    metadata_var_without_na <- metadata_var[!is.na(metadata_var[,variable]),]
+    colors <- c("#A06A2C", "#B2182B") 
   }
   
-  return(p)
-}
-
-pca_plots_OTHER <- function(mpse_object,by="Group"){
-  plot_12 <- mpse_object %>% mp_plot_ord(
-    .ord = pcoa, 
-    .group = !!sym(by), 
-    .color = !!sym(by), 
-    ellipse = TRUE, show.legend = FALSE ) +
-    scale_fill_manual(
-      values=c("#309f87","#425387"), 
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_color_manual(
-      values=c("#309f87","#425387"),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_size_continuous(
-      range=c(0.5, 3),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) + 
-    ggtitle("PC1 vs PC2")
   
-  plot_13 <- mpse_object %>% mp_plot_ord(
-    .ord = pcoa, 
-    .group = !!sym(by), 
-    .color = !!sym(by), 
-    .dim=c(1,3),
-    ellipse = TRUE, show.legend = FALSE ) +
-    scale_fill_manual(
-      values=c("#309f87","#425387"), 
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_color_manual(
-      values=c("#309f87","#425387"),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_size_continuous(
-      range=c(0.5, 3),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) + 
-    ggtitle("PC1 vs PC3")
-  
-  plot_23 <- mpse_object %>% mp_plot_ord(
-    .ord = pcoa, 
-    .group = !!sym(by), 
-    .color = !!sym(by), 
-    .dim=c(2,3),
-    ellipse = TRUE, show.legend = FALSE ) +
-    scale_fill_manual(
-      values=c("#309f87","#425387"), 
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_color_manual(
-      values=c("#309f87","#425387"),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) +
-    scale_size_continuous(
-      range=c(0.5, 3),
-      guide = guide_legend(keywidth=0.6, keyheight=0.6, label.theme=element_text(size=6.5))) + 
-    ggtitle("PC2 vs PC3")
-  
-  return(list(plot_12,plot_13,plot_23))
-  
-}
-
-alpha_div_plot <- function(alpha_data){
-  p_values <- c()
-  for (index in c("Observe","Shannon","Simpson","Pielou")){
-    res <- wilcox.test(alpha_data[,index][alpha_data$Platform=="ILLUMINA"],
-                       alpha_data[,index][alpha_data$Platform=="AVITI"],
-                       paired=TRUE) 
-    p_values <- c(p_values,res$p.value)
-  }
-  
-  sig <- p_values
-  
-  sig[p_values > 0.05] <-'N.S.'
-  sig[p_values <= 0.05] <- 'P<0.05'
-  sig[p_values <= 0.01] <- 'P<0.01'
-  sig[p_values <= 0.001] <- 'P<0.001'
-  
-  alpha_data_melted <- melt(alpha_data)
-  
-  graphLabels <- data.frame(variable = c("Observe","Shannon","Simpson","Pielou"), Pval = sig)
-  
-  p <- ggplot() +
-    geom_line(position=position_jitter(w=0.1, h=0,seed = 123),data=alpha_data_melted,aes(x = Platform,y = value,group = Pair),
-              color = "grey",size = 0.6, alpha = 0.3) + 
-    geom_boxplot(data=alpha_data_melted, aes(x=Platform, y=value),outliers = FALSE) + 
-    geom_jitter(data=alpha_data_melted, aes(x=Platform, y=value, color=Platform),position = position_jitter(w=0.1, h=0,seed = 123)) + 
-    scale_color_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) +
-    scale_fill_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) + 
-    # scale_fill_manual(values=c("#f9847c","#1ac6ca")) + 
-    # scale_color_manual(values=c("#f9847c","#1ac6ca")) + 
-    guides(fill="none",color = "none") + 
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))+ 
-    facet_wrap(~factor(variable,levels=c("Observe","Shannon","Simpson","Pielou")), ncol = 4,scales = "free")  + 
-    
-    geom_text(data = graphLabels, aes(Inf, Inf, label = Pval),hjust = 1.2, vjust = 1.2,size=5, show.legend = FALSE) 
-  
+  p <- ggplot(metadata_var_without_na) + 
+    geom_boxplot(aes(x=Group, y=!!sym(variable)),outliers = FALSE) + 
+    geom_jitter(width = 0.2,height = 0,aes(x=Group, y=!!sym(variable), color=Group,shape=Country),size=2) +
+    scale_fill_manual(values=colors) + 
+    scale_color_manual(values=colors) + 
+    theme_minimal() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
+          axis.ticks.x = element_line(size=0.3,color = "black"),
+          axis.ticks.y = element_line(size=0.3,color="black"),
+          axis.ticks.length = unit(4,"pt"),
+          panel.grid = element_blank())
   return(p)
 }
 
 
-beta_div_plot <- function(ps,metadata,rarefy=TRUE,normalize=FALSE,filter=FALSE,measure="aitchison"){
-  if(rarefy){
-    ps <- rarefy_even_depth(ps,sample.size = 10000)
-  }
-  if (filter){
-    filt_data <- abundance_filtering(abundance_threshold = 0.01,
-                                     as.data.frame(ps@otu_table) %>% rownames_to_column("SeqID"),
-                                     as.data.frame(ps@tax_table) %>% rownames_to_column("SeqID"))
+
+clinical_correlation <- function(metadata,variable,level,
+                                 segment="ileum"){
+  # Calculates spearman correlations between clinical variables and MDI
+  # inputs:
+  # metadata - metadata dataframe with 'SampleID' and 'MDI'
+  # variable - name of clinical variable - column in metadata df
+  # level - ASV/genus, on which level MDI was calculated
+  # segment - terminal_ileum, colon - in colon, 100 iterations will be performed
+  # outputs:
+  # cor - table with $P (p_values) and $r (correlation coefficients)
+  
+  set.seed(123)
+  level <- tolower(level)
+  
+  metadata_var <- metadata %>% 
+    dplyr::select(all_of(c("SampleID", "PatientID",
+                           paste0("dys_filtered_",level),
+                           variable, "Group")))
+  
+  metadata_var[,variable] <- as.numeric(metadata_var[,variable])
+  metadata_var <- drop_na(metadata_var)
+  
+  if (segment=="colon"){
+    n_iterations <- 100
+    corrs <- list()
+    for (i in 1:n_iterations){
+      random_sampled_df <- metadata_var %>%
+        group_by(PatientID) %>%  # Group by PatientID
+        slice_sample(n = 1) %>% # Randomly pick one row per PatientID
+        ungroup()
+      
+      corr <- cor.table(
+        random_sampled_df[,c(variable,paste0("dys_filtered_",level))], 
+        cor.method="spearman"
+      )
+      
+      corr$P <- corr$P[2]
+      corr$r <- corr$r[2]
+      corrs[[i]] <- corr
+    }
     
-    ps <- construct_phyloseq(filt_data[[1]],filt_data[[2]],metadata)
+    r_values_list <- unlist(map(corrs, ~ .x$r))  # List of r matrices
+    p_values_list <- unlist(map(corrs, ~ .x$P))  # List of P matrices
+    mean_r <- round(median(r_values_list),2)
+    
+    p_value <- quantile(p_values_list,0.9)
+    corr <- list()
+    corr$r <- mean_r
+    corr$P <- p_value
+  } else {
+    corr <- cor.table(
+      metadata_var[,c(variable,paste0("dys_filtered_",level))],
+      cor.method="spearman")
+    
+    corr$P <- corr$P[2]
+    corr$r <- round(corr$r[2],2)
   }
-  if(normalize){
-    ps <- transform_sample_counts(ps, function(x) x/sum(x))
+  
+  return(corr)
+}
+
+clinical_correlation_abundances <- function(metadata,variable,taxon,level,
+                                            segment="ileum",rename_p=FALSE){
+  # Calculates spearman correlations between taxon and MDI
+  # inputs:
+  # metadata - metadata dataframe with 'SampleID' and 'MDI'
+  # variable - name of clinical variable - column in metadata df
+  # taxon - name of taxon
+  # level - ASV/genus, on which level MDI was calculated
+  # segment - terminal_ileum, colon - in colon, 100 iterations will be performed
+  # outputs:
+  # cor - table with $P (p_values) and $r (correlation coefficients)
+  
+  set.seed(123)
+  level <- tolower(level)
+  
+  metadata_var <- metadata %>% dplyr::select(all_of(c("SampleID", "PatientID",
+                                                      variable,taxon,
+                                                      "Group")))
+  metadata_var[,variable] <- as.numeric(metadata_var[,variable])
+  metadata_var <- drop_na(metadata_var)
+  
+  if (segment=="colon"){
+    n_iterations <- 100
+    corrs <- list()
+    for (i in 1:n_iterations){
+      random_sampled_df <- metadata_var %>%
+        group_by(PatientID) %>%  # Group by PatientID
+        slice_sample(n = 1) %>% # Randomly pick one row per PatientID
+        ungroup()
+      
+      corr <- cor.table(random_sampled_df[,c(variable,taxon)], cor.method="spearman")
+      corr$P <- corr$P[2]
+      corr$r <- corr$r[2]
+      corrs[[i]] <- corr
+    }
+    r_values_list <- unlist(map(corrs, ~ .x$r))  # List of r matrices
+    p_values_list <- unlist(map(corrs, ~ .x$P))  # List of P matrices
+    mean_r <- round(median(r_values_list),2)
+    
+    p_value <- quantile(p_values_list,0.9)
+    if (rename_p) p_value <- ifelse(p_value < 0.001, " < 0.001", ifelse(p_value < 0.01, " < 0.01", ifelse(p_value < 0.05, " < 0.05", paste0("=",round(p_value,3)))))
+    corr <- list()
+    corr$r <- mean_r
+    corr$P <- p_value
+  } else {
+    corr <- cor.table(metadata_var[,c(variable,taxon)], cor.method="spearman")
+    corr$r <- round(corr$r[2],2)
+    p_value <- corr$P[2]
+    if (rename_p) p_value <- ifelse(p_value < 0.001, " < 0.001", ifelse(p_value < 0.01, " < 0.01", ifelse(p_value < 0.05, " < 0.05", paste0("=",round(p_value,3)))))
+    corr$P <- p_value
   }
-  if (measure=="aitchison") {
-    ps <- microbiome::transform(ps,"clr")
-    measure_final <- "euclidean"
-  } else if (measure=="robust.aitchison"){
-    ps <- microbiome::transform(ps,"rclr")
-    measure_final <- "euclidean"
-  } else measure_final <- measure
   
-  ord <- ordinate(ps, method = "PCoA", distance = measure_final)
-  imp_vec <- ord$values$Relative_eig
-  pca_vec <- ord$vectors
-  lab1 = paste("PCo1 ", "(",round(imp_vec[1]*100,2),"%", ")", sep="")
-  lab2 = paste("PCo2 ", "(",round(imp_vec[2]*100,2),"%", ")", sep="")
-  lab3 = paste("PCo3 ", "(",round(imp_vec[3]*100,2),"%", ")", sep="")
+  return(corr)
+}
+
+clinical_scatter <- function(corr,metadata,variable,level){
+  # Creates scatterplot visualizing MDI~clinical_variable and its correlation 
+  # coefficient
+  # inputs:
+  # corr - correlations, calculated by clinical_correlation()
+  # metadata - metadata dataframe with 'SampleID'
+  # variable - name of variable to be plotted
+  # level - ASV/genus ...
   
-  data_for_pca <- as.data.frame(t(asv_tab[,-which(colnames(asv_tab)=="SeqID")]))
-  data_for_pca <- cbind(data_for_pca,metadata)
+  level <- tolower(level)
+  df_for_scatter_plot <- metadata %>% 
+    dplyr::select(all_of(c("SampleID", "PatientID",
+                           paste0("dys_filtered_",level),
+                           variable, "Group","Country")))
   
-  p_12 <- ggplot(data_for_pca, aes(x=pca_vec[,1],y=pca_vec[,2],color=!!sym("Platform"))) + 
-    geom_line(aes(group=Pair), colour="grey") +
-    geom_point(show.legend = TRUE,size=3) + stat_ellipse(show.legend = FALSE) + 
-    xlab(lab1)+
-    ylab(lab2)+
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
-    theme(legend.position = "right") + 
-    scale_color_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) +
-    scale_fill_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) 
-  #scale_fill_manual(values=c("#f9847c","#1ac6ca")) + 
-  #scale_color_manual(values=c("#f9847c","#1ac6ca")) 
+  df_for_scatter_plot[,variable] <- as.numeric(df_for_scatter_plot[,variable])
   
-  p_13 <- ggplot(data_for_pca, aes(x=pca_vec[,1],y=pca_vec[,3],color=!!sym("Platform"))) + 
-    geom_line(aes(group=Pair), colour="grey") +
-    geom_point(show.legend = TRUE, size=3) + stat_ellipse(show.legend = FALSE) + 
-    xlab(lab1)+
-    ylab(lab3)+
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) +  
-    theme(legend.position = "right") + 
-    #  scale_fill_manual(values=c("#f9847c","#1ac6ca")) + 
-    #   scale_color_manual(values=c("#f9847c","#1ac6ca")) 
-    scale_color_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) +
-    scale_fill_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) 
+  df_for_scatter_plot <- drop_na(df_for_scatter_plot)
   
-  p_23 <- ggplot(data_for_pca, aes(x=pca_vec[,2],y=pca_vec[,3],color=!!sym("Platform"))) + 
-    geom_line(aes(group=Pair), colour="grey") +
-    geom_point(show.legend = TRUE,size=3) + stat_ellipse(show.legend = FALSE) + 
-    xlab(lab2)+
-    ylab(lab3)+
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
-    theme(legend.position = "right") + 
-    # scale_fill_manual(values=c("#f9847c","#1ac6ca")) + 
-    #   scale_color_manual(values=c("#f9847c","#1ac6ca")) 
-    scale_color_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) +
-    scale_fill_manual(values=c("#309f87","#425387","#f9c675","#d55c4a")) 
+  colors <- c("#309f87","#f9c675","#F08080","#A00000")
+  if (!"healthy" %in% unique(df_for_scatter_plot$Group)) colors <- c("#f9c675","#F08080","#A00000")
   
-  p <- ggarrange(p_12,p_13,p_23,ncol=3)
-  return(p_12)
+  r_corr <- corr$r
+  p_corr <- corr$P
+  p_corr <- ifelse(p_corr < 0.001, " < 0.001", ifelse(p_corr < 0.01, " < 0.01", ifelse(p_corr < 0.05, " < 0.05", paste0("=",round(p_corr,3)))))
+  
+  x_var <- paste0("dys_filtered_",level)
+  x_position <- (max(df_for_scatter_plot[,x_var])) - 0.2*(max(df_for_scatter_plot[,x_var]) - min(df_for_scatter_plot[,x_var]))
+  
+  y_position <- max(df_for_scatter_plot[,variable]) - 0.05*(max(df_for_scatter_plot[,variable]) - min(df_for_scatter_plot[,variable]))
+  
+  labels <- paste0("R = ",r_corr, "\\nP ",p_corr)
+  p <- ggplot(df_for_scatter_plot) + 
+    geom_point(aes(x=!!sym(x_var), y=!!sym(variable), color=Group,shape=Country)) + 
+    geom_smooth(aes(x=!!sym(x_var), y=!!sym(variable)),method=lm, se=TRUE) +
+    geom_text(aes(x=x_position, y=y_position),
+              label=gsub("\\\\n", "\n", labels),hjust = 0, size = 5/.pt) + 
+    scale_color_manual(values=colors) + 
+    theme_minimal() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
+          axis.ticks.x = element_line(size=0.3,color = "black"),
+          axis.ticks.y = element_line(size=0.3,color="black"),
+          axis.ticks.length = unit(4,"pt"),
+          panel.grid = element_blank()) + 
+    xlab("MDI")
+  return(p)
+}
+
+clinical_scatter_abundances <- function(corr,metadata,variable,taxon,level,
+                                        size=4){
+  # Creates scatterplot visualizing variable~taxon and its correlation 
+  # coefficient
+  # inputs:
+  # corr - correlations, calculated by clinical_correlation()
+  # metadata - metadata dataframe with 'SampleID'
+  # variable - name of variable to be plotted
+  # taxon - name of the taxon to be plotted
+  # level - ASV/genus ...
+  # size - size of point in ggplot
+  # outputs:
+  # p - scatterplot 
+  
+  level <- tolower(level)
+  df_for_scatter_plot <- metadata %>% dplyr::select(all_of(c("SampleID", "PatientID","Country",
+                                                             taxon,
+                                                             variable, "Group")))
+  df_for_scatter_plot[,variable] <- as.numeric(df_for_scatter_plot[,variable])
+  df_for_scatter_plot <- drop_na(df_for_scatter_plot)
+  colors <- c("#309f87","#f9c675","#F08080","#A00000")
+  if (!"healthy" %in% unique(df_for_scatter_plot$Group)) colors <- c("#f9c675","#F08080","#A00000")
+  
+  x_var <- taxon
+  r_corr <- corr$r
+  p_corr <- corr$P
+  
+  x_position <- (max(df_for_scatter_plot[,x_var])) - 0.2*(max(df_for_scatter_plot[,x_var]) - min(df_for_scatter_plot[,x_var]))
+  y_position <- max(df_for_scatter_plot[,variable]) - 0.05*(max(df_for_scatter_plot[,variable]) - min(df_for_scatter_plot[,variable]))
+  labels <- paste0("r = ",r_corr, "\\np ",p_corr)
+  p <- ggplot(df_for_scatter_plot) + 
+    geom_point(aes(x=!!sym(x_var), y=!!sym(variable), color=Group,shape=Country)) + 
+    geom_smooth(aes(x=!!sym(x_var), y=!!sym(variable)),method=lm, se=TRUE) +
+    geom_text(aes(x=x_position, y=y_position,label=gsub("\\\\n", "\n", labels)),size=size) + 
+    scale_color_manual(values=colors) + 
+    theme_minimal() + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 0),
+          axis.ticks.x = element_line(size=0.3,color = "black"),
+          axis.ticks.y = element_line(size=0.3,color="black"),
+          axis.ticks.length = unit(4,"pt"),
+          panel.grid = element_blank()) 
+  return(p)
 }
 
 
 
-mock_zymo_genus_merging <- function(asv_table,taxa_table,zymo_asv_table, zymo_taxa){
-  # merging mock community samples with reference abundance
-  taxa_reads_table <- create_asv_taxa_table(asv_table,taxa_table)
-  genus_data <- aggregate_taxa(asv_table,taxa_table, taxonomic_level = "Genus")
-  genus_asv_table <- genus_data[[1]]
-  genus_taxa_table <- genus_data[[2]]
+subprepare_for_heatmap <- function(corrs_segment,MDI=TRUE){
+  # Function for heatmap construction
+  # input:
+  # corrs_segment - correlation coefficients calculated for specific segment
+  # MDI - boolean, if heatmap for MDI will be created, default TRUE
+  # output:
+  # list(p_df_sig,r_df) - dataframe with significant correlations to be visualized
   
-  genus_asv_table_norm <- as.data.frame(apply(genus_asv_table[,-1],2,function(x) x/sum(x)))
-  genus_asv_table_norm$SeqID <- genus_asv_table$SeqID
+  corrs_segment <- corrs_segment[!grepl("_log_",names(corrs_segment))]
+  names(corrs_segment) <- gsub("score_","",names(corrs_segment))
+  # Example list structure for demonstration
+  # Initialize empty lists for r and P values
+  r_values <- list()
+  p_values <- list()
   
-  colnames(zymo_asv_table)[1] <- "SeqID"
-  colnames(zymo_taxa)[1] <- "SeqID"
-  
-  genus_data_zymo <- aggregate_taxa(zymo_asv_table,zymo_taxa, taxonomic_level = "Genus")
-  genus_zymo_asv_table <- genus_data_zymo[[1]][-9,]
-  genus_zymo_taxa_table <- genus_data_zymo[[2]][-9,]
-  
-  merged_data <- merge(genus_zymo_asv_table,genus_asv_table_norm, by="SeqID", all=TRUE)
-  merged_data[is.na(merged_data)] <- 0
-  colnames(merged_data)[2] <- "ZYMO REFERENCE"
-  return(merged_data)
-}
-
-
-precision_recall <- function(mock_zymo_genus){
-  # calculating precision
-  precs <- c()
-  recs <- c()
-  zymo_taxa_df <- mock_zymo_genus$`ZYMO REFERENCE`
-  zymo_taxons <- zymo_taxa_df>0
-  zymo_taxons <- mock_zymo_genus$SeqID[zymo_taxons]
-  for (sample in colnames(mock_zymo_genus)[-c(1,2)]){
-    sample_taxa_df <- mock_zymo_genus[,sample]
-    sample_taxons <- sample_taxa_df>0
-    sample_taxons <- mock_zymo_genus$SeqID[sample_taxons]
+  # Extract segment and clinical variables
+  for (name in names(corrs_segment)) {
+    if (MDI) {
+      clinical_var <- sub("^(.*?_){2}", "",  name)
+      if (all(grepl("ileum",names(corrs_segment)))) {
+        segment <- "MDI terminal ileum"
+      } else if (all(grepl("colon",names(corrs_segment)))) {
+        segment <- "MDI colon"
+      } else (message("PROBLEM with segment"))
+      
+    }
+    else {
+      segment <- sub("^(.*?_){3}", "",  name)
+      clinical_var <- sub(segment,"", sub("^(.*?_){2}", "",  name))
+      clinical_var <- gsub("_","",clinical_var)
+    }
     
-    tp <- sum(sample_taxons %in% zymo_taxons)
-    fp <- sum(!(sample_taxons %in% zymo_taxons))
-    fn <- sum(!(zymo_taxons %in% sample_taxons))
-    rec = tp/(tp+fn)
-    recs <- c(recs,rec)
     
-    prec = tp/(tp + fp)
-    precs <- c(precs,prec)
+    # Fill the r and P lists
+    if (!is.null(corrs_segment[[name]]$r)) {
+      r_values[[segment]][clinical_var] <- corrs_segment[[name]]$r
+    }
+    
+    if (!is.null(corrs_segment[[name]]$P)) {
+      p_values[[segment]][clinical_var] <- corrs_segment[[name]]$P
+    }
   }
-  names(precs) <- colnames(mock_zymo_genus)[-c(1,2)]
-  names(recs) <- colnames(mock_zymo_genus)[-c(1,2)]
-  df <- data.frame(Precision=precs,
-                   Recall=recs)
-  return(df)
+  
+  # Convert the lists to data frames
+  r_df <- do.call(rbind, lapply(r_values, function(x) setNames(as.data.frame(t(x)), names(x))))
+  p_df <- do.call(rbind, lapply(p_values, function(x) setNames(as.data.frame(t(x)), names(x))))
+  
+  # Add row names as segment names
+  rownames(r_df) <- names(r_values)
+  rownames(p_df) <- names(p_values)
+  
+  if (MDI) pd_df_corrected <- as.data.frame(p.adjust(p_df,method="BH"))
+  else pd_df_corrected <- as.data.frame(apply(p_df,2,function(x) p.adjust(x, method="BH")))
+  p_df_sig <- pd_df_corrected
+  p_df_sig[,] <- ""
+  
+  p_df_sig[pd_df_corrected < 0.05] <- "*"
+  p_df_sig[pd_df_corrected < 0.01] <- "**"
+  p_df_sig[pd_df_corrected < 0.001] <- "***"
+  
+  if (MDI) p_df_sig <- t(p_df_sig) %>% 
+    as.data.frame()  %>% 
+    `rownames<-`(segment)
+  
+  return(list(p_df_sig,r_df))
 }
 
-
-composition <- function(ps, rarefy=FALSE, legend=FALSE, 
-                        legend_position="right",groupby=NULL){
-  if (rarefy) {
-    ps <- rarefy_even_depth(ps,sample.size = 10000)
-  }
-  ps <- suppressWarnings(merge_samples(ps, groupby))
-  ps <- transform_sample_counts(ps, function(x) x/sum(x))
+prepare_for_heatmap <- function(corrs_ileum,corrs_colon){
+  # Function for heatmap construction
+  # input:
+  # corrs_ileum - correlation coefficients calculated for terminal_ileum
+  # corrs_colon - correlation coefficients calculated for colon
+  # output:
+  # list(p_df_sig,r_df) - dataframe with significant correlations to be visualized
   
-  p <- plot_bar(ps, fill = "Phylum") +
-    geom_bar(aes(color=Phylum, 
-                 fill=Phylum), stat="identity", position="stack") + 
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
-    scale_x_discrete(guide = guide_axis(angle = 90)) + 
-    scale_color_manual(breaks=c("Actidobacteriota","Actinobacteriota","Bacteroidota","Bdellovibionota","Campilobacterota","Chloroflexi","Cyanobacteria","Deinococcota","Dependentiae","Desulfobacterota","Elusimicrobiota","Euryarcheota","Firmicutes","Fusobacteriota","Myxzcoccota","NB1-j","Patescibacteria","Planctomycetota","Proteobacteria","RCP2-54","Spirochaetota","Synergistota","Thermoplasmatota","unassigned","Verrucomicrobiota","WPS-2"),
-                       values=c("#1f1f1f","#546494","#388842","#8350b6","#d62e5f","#381216","#6e94c8","#aeae43","#9d729f","#ba3237","#723f23","#4f9eba","#b3dd9c","#e18dac","#ae4a37","#dbad80","#8ebcca","#e7d836","#e7928f","#dc6438","#d7c2a3","#e9e07f","#d1a9b0","#e8b14f","#309f87","#425387","#f9c675","#d55c4a"))+
-    
-    
-    scale_fill_manual(breaks=c("Actidobacteriota","Actinobacteriota","Bacteroidota","Bdellovibionota","Campilobacterota","Chloroflexi","Cyanobacteria","Deinococcota","Dependentiae","Desulfobacterota","Elusimicrobiota","Euryarcheota","Firmicutes","Fusobacteriota","Myxzcoccota","NB1-j","Patescibacteria","Planctomycetota","Proteobacteria","RCP2-54","Spirochaetota","Synergistota","Thermoplasmatota","unassigned","Verrucomicrobiota","WPS-2"),
-                      values=c("#1f1f1f","#546494","#388842","#8350b6","#d62e5f","#381216","#6e94c8","#aeae43","#9d729f","#ba3237","#723f23","#4f9eba","#b3dd9c","#e18dac","#ae4a37","#dbad80","#8ebcca","#e7d836","#e7928f","#dc6438","#d7c2a3","#e9e07f","#d1a9b0","#e8b14f","#309f87","#425387","#f9c675","#d55c4a"))
+  ileum_list <- subprepare_for_heatmap(corrs_ileum)
+  colon_list <- subprepare_for_heatmap(corrs_colon)
   
-  if (!legend) p <- p + theme(legend.position = "none")
-  else p <- p + theme(legend.position = legend_position)
-  return (p)
-}
-
-mock_zymo_genus_plot <- function(mock_zymo_genus, metadata, setting){
+  p_df_sig <- rbind(ileum_list[[1]],colon_list[[1]])
+  r_df <- rbind(ileum_list[[2]],colon_list[[2]])
   
-  metadata <- metadata %>% filter(Sample %in% colnames(mock_zymo_genus)[-1]) %>% 
-    column_to_rownames("Sample")
-  
-  mock_otf <- rownames(metadata[metadata$primers=="OTF",])
-  mock_stf <- rownames(metadata[metadata$primers=="STF",])
-  
-  mock_zymo_genus <- mock_zymo_genus[,c("SeqID", "ZYMO REFERENCE", mock_stf,mock_otf)]
-  
-  
-  tree <- hclust(dist(t(mock_zymo_genus[,-1])))
-  tree <- dendro_data(tree)
-  
-  metadata <- metadata[colnames(mock_zymo_genus)[-1],c("primers","sample_type","run_number",setting)]
-  metadata[1,] <- c("ZR","ZR","ZR","ZR")
-  rownames(metadata)[1] <- "ZYMO REFERENCE"
-  
-  mock_zymo_genus_samples <- mock_zymo_genus
-  metadata_samples <- metadata
-  mock_zymo_genus_melted_samples <- melt(mock_zymo_genus_samples)
-  colnames(mock_zymo_genus_melted_samples) <- c("SeqID", "Sample", "Relative abundance")
-  
-  mock_zymo_genus <- mock_zymo_genus[,c("SeqID",tree$labels$label)]
-  metadata <- metadata[colnames(mock_zymo_genus)[-1],c("primers","sample_type","run_number",setting)]
-  
-  mock_zymo_genus_melted <- melt(mock_zymo_genus)
-  colnames(mock_zymo_genus_melted) <- c("SeqID", "Sample", "Relative abundance")
-  
-  
-  if (!(FALSE %in% (rownames(metadata) == colnames(mock_zymo_genus)[-1]))){
-    labels <- paste(metadata$primers,metadata$run_number,as.character(round(as.numeric(metadata[[setting]]),2)), sep="\n")
-  labels_samples <- paste(metadata_samples$primers,metadata_samples$run_number,as.character(round(as.numeric(metadata_samples[[setting]]),2)), sep="\n")
-    } 
-  
-  p <- ggplot() + 
-    geom_bar(data=mock_zymo_genus_melted, aes(y=`Relative abundance`, x=Sample, fill=SeqID),position="fill", stat="identity") + 
-    geom_text(size=2,aes(label = labels,x = 1:length(labels),y=rep(1.07,length(labels)))) + 
-    scale_y_continuous(limits = c(-0.2,1.1),breaks=seq(0,1,by=0.2)) + 
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
-    theme(legend.position = "right",axis.text.x = element_blank(),
-          legend.text=element_text(size=10),
-          legend.title = element_text(size=15),  
-          axis.title.y = element_text(size=15), 
-          axis.title.x = element_text(size=15),
-          axis.text.y=element_text(size=10),
-          axis.ticks = element_blank())  + 
-    scale_fill_manual(values=setNames(c("#546494","#388842","#8350b6","#d62e5f","#381216","#6e94c8","#aeae43","#9d729f"),c("Pseudomonas","Escherichia-Shigella","Salmonela","Lactobacillus","Enterococcus","Staphylococcus","Listeria","Bacillus"))) + 
-    guides(fill=guide_legend(title="Genus")) + 
-    geom_segment(
-      data = tree$segments,
-      aes(x = x, y = -y, xend = xend, yend = -yend)
-    )
-  
-  p_samples <- ggplot() + 
-    geom_bar(data=mock_zymo_genus_melted_samples, aes(y=`Relative abundance`, x=Sample, fill=SeqID),position="fill", stat="identity") + 
-    geom_text(size=2,aes(label = labels_samples,x = 1:length(labels_samples),y=rep(1.07,length(labels_samples)))) + 
-    scale_y_continuous(limits = c(0,1.1),breaks=seq(0,1,by=0.2)) + 
-    theme_classic() + 
-    theme(panel.border = element_rect(color = "black", fill = NA, size = 0)) + 
-    theme(legend.position = "right",axis.text.x = element_blank(),
-          legend.text=element_text(size=10),
-          legend.title = element_text(size=15),  
-          axis.title.y = element_text(size=15), 
-          axis.title.x = element_text(size=15),
-          axis.text.y=element_text(size=10),
-          axis.ticks = element_blank())  + 
-    scale_fill_manual(values=setNames(c("#546494","#388842","#8350b6","#d62e5f","#381216","#6e94c8","#aeae43","#9d729f"),c("Pseudomonas","Escherichia-Shigella","Salmonela","Lactobacillus","Enterococcus","Staphylococcus","Listeria","Bacillus"))) + 
-    guides(fill=guide_legend(title="Genus")) 
-    
-  
-  
-  return(list(p,p_samples))
+  return(list(p_df_sig,r_df))
   
 }

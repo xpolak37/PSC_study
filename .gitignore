@@ -1,3 +1,7 @@
 progs/
 docs/
 data/
+analysis/figures
+analysis/intermediate_files
+analysis/snowflake_networks
+SRA_submission
