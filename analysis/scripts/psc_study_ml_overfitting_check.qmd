@@ -1,0 +1,1396 @@
+---
+title: "Mucosal microbiota alterations in primary sclerosis cholangitis persist after liver transplantation and are associated with clinical features independently of geography"
+subtitle: "ML models - overfitting check"
+format: 
+  html:  
+    embed-resources: true
+    keep-md: false
+    toc: true
+    toc-expand: 3
+    toc-depth: 6
+    toc-location: left
+    number-sections: true
+    number-depth: 6
+    code-fold: false
+    code-tools: true
+    code-summary: "Open code"
+    grid: 
+      body-width: 1000px
+      sidebar-width: 600px
+      margin-width: 100px
+editor: source
+project:
+  type: default
+  output-dir: output
+fontsize: 12 px
+---
+
+-----------------------------------------------------------
+
+# Introduction 
+
+To prevent potential training errors and overfitting, a validity check was performed for all models by randomly shuffling the sample labels. The performance of these models should not reach significantly high values.
+
+*Importing libraries and custom functions built for this analysis*
+
+```{r, warning=FALSE}
+source("custom_functions.R")
+```
+
+# Data Import
+
+Importing ASV, taxa and metadata tables for both Czech and Norway
+samples.
+
+**Czech**
+
+```{r, warning=FALSE}
+path = "../../data/analysis_ready_data/ikem/"
+asv_tab_ikem <- as.data.frame(fread(file.path(path,"asv_table_ikem.csv"),
+                                    check.names = FALSE))
+taxa_tab_ikem <- as.data.frame(fread(file.path(path,"taxa_table_ikem.csv"),
+                                     check.names = FALSE))
+metadata_ikem <- as.data.frame(fread(file.path(path,"metadata_ikem.csv"),
+                                     check.names = FALSE))
+```
+
+**Norway**
+
+```{r, warning=FALSE}
+path = "../../data/analysis_ready_data/norway/"
+asv_tab_norway <- as.data.frame(fread(file.path(path,"asv_table_norway.csv"),
+                                    check.names = FALSE))
+taxa_tab_norway <- as.data.frame(fread(file.path(path,"taxa_table_norway.csv"),
+                                    check.names = FALSE))
+metadata_norway <- as.data.frame(fread(file.path(path,"metadata_norway.csv"),
+                                    check.names = FALSE))
+```
+
+# Merging
+
+**Terminal ileum**
+
+```{r, warning=FALSE}
+ileum_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=asv_tab_norway,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=taxa_tab_norway,
+                           metadata_1=metadata_ikem,
+                           metadata_2=metadata_norway,
+                           segment="TI",Q="Q1")
+
+ileum_asv_tab <- ileum_data[[1]]
+ileum_taxa_tab <- ileum_data[[2]]
+ileum_metadata <- ileum_data[[3]]
+```
+
+**Colon**
+
+```{r, warning=FALSE}
+colon_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=asv_tab_norway,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=taxa_tab_norway,
+                           metadata_1=metadata_ikem,
+                           metadata_2=metadata_norway,
+                           segment="colon",Q="Q1")
+
+colon_asv_tab <- colon_data[[1]]
+colon_taxa_tab <- colon_data[[2]]
+colon_metadata <- colon_data[[3]]
+```
+
+# Data Analysis - Terminal ileum
+
+```{r, warning=FALSE}
+segment="terminal_ileum"
+```
+
+## Machine learning
+
+```{r, warning=FALSE}
+path = "../results/Q1/models_overfitting_check"
+```
+
+### ENET
+
+```{r, warning=FALSE}
+model="enet"
+```
+
+#### Genus level
+
+```{r, warning=FALSE}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r, warning=FALSE}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+##### pre_ltx vs healthy
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+enet_model <- glmnet_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+models_summ <- list()
+models_cm <- list()
+roc_cs <- list()
+betas <- list()
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+
+roc_c
+```
+
+##### pre_ltx vs post_ltx
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+enet_model <- glmnet_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+
+roc_c
+```
+
+##### post_ltx vs healthy
+
+```{r, warning=FALSE}
+group <- c("post_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,group, 
+                                     usage="ml_clr")
+
+# fit the model
+enet_model <- glmnet_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+roc_c
+```
+
+#### Saving results
+
+```{r, warning=FALSE}
+models_summ_df_ileum <- do.call(rbind, 
+  models_summ[grep(segment,names(models_summ),value = TRUE)])
+
+write.csv(models_summ_df_ileum,file.path(path,paste0("elastic_net_",segment,".csv")))
+```
+
+### Supplementary models
+
+```{r, warning=FALSE}
+supplements_models <- list()
+```
+
+#### CLR-transformed data
+
+##### kNN
+
+```{r, warning=FALSE}
+model="knn"
+```
+
+###### Genus level
+
+```{r, warning=FALSE}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r, warning=FALSE}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+**pre_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+knn_model <- knn_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+**pre_ltx vs post_ltx**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+knn_model <- knn_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+**post_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("post_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+knn_model <- knn_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+##### RF
+
+```{r, warning=FALSE}
+model="rf"
+```
+
+###### Genus level
+
+```{r, warning=FALSE}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r, warning=FALSE}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+**pre_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+rf_model <- rf_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+**pre_ltx vs post_ltx**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+rf_model <- rf_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+**post_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("post_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+rf_model <- rf_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+##### GBoost
+
+```{r, warning=FALSE}
+model="gb"
+```
+
+###### Genus level
+
+```{r, warning=FALSE}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r, warning=FALSE}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+**pre_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+gbm_model <- gbm_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+**pre_ltx vs post_ltx**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+gbm_model <- gbm_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+**post_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("post_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+gbm_model <- gbm_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+#### Saving results
+
+```{r, warning=FALSE}
+models_list <- list()
+
+for (model_name in names(supplements_models$models_summ)){
+  df <- do.call(rbind, supplements_models$models_summ[[model_name]])
+  models_list[[model_name]] <- df
+}
+
+write.xlsx(models_list,
+           file=file.path(path,paste0("supplements_models_",segment,".xlsx")),
+           rowNames=TRUE)
+
+```
+
+# Data Analysis - Colon
+
+```{r, warning=FALSE}
+segment="colon"
+```
+
+## Machine learning
+
+```{r, warning=FALSE}
+path = "../results/Q1/models_overfitting_check"
+```
+
+### ENET
+
+```{r, warning=FALSE}
+model="enet"
+```
+
+#### Genus level
+
+```{r, warning=FALSE}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r, warning=FALSE}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+##### pre_ltx vs healthy
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+enet_model <- glmnet_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",overfitting_check = TRUE)
+
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+
+roc_c
+```
+
+##### pre_ltx vs post_ltx
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+enet_model <- glmnet_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+
+roc_c
+```
+
+##### post_ltx vs healthy
+
+```{r, warning=FALSE}
+group <- c("post_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+enet_model <- glmnet_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group",
+                              N=500,
+                              clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                              overfitting_check = TRUE)
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+roc_c
+```
+
+#### Saving results
+
+```{r, warning=FALSE}
+models_summ_df_colon <- do.call(rbind, 
+  models_summ[grep(segment,names(models_summ),value = TRUE)])
+
+write.csv(models_summ_df_colon,file.path(path,paste0("elastic_net_",segment,".csv")))
+```
+
+### Supplementary models
+
+#### CLR-transformed data
+
+##### kNN
+
+```{r, warning=FALSE}
+model="knn"
+```
+
+###### Genus level
+
+```{r, warning=FALSE}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r, warning=FALSE}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**pre_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+knn_model <- knn_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                          overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+**pre_ltx vs post_ltx**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+knn_model <- knn_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                          overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+**post_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("post_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+knn_model <- knn_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                          overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+##### RF
+
+```{r, warning=FALSE}
+model="rf"
+```
+
+###### Genus level
+
+```{r, warning=FALSE}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r, warning=FALSE}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**pre_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+rf_model <- rf_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                        clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                        overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+**pre_ltx vs post_ltx**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+rf_model <- rf_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                        clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                        overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+**post_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("post_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+rf_model <- rf_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                        clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                        overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+##### GBoost
+
+```{r, warning=FALSE}
+model="gb"
+```
+
+###### Genus level
+
+```{r, warning=FALSE}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r, warning=FALSE}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**pre_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+gbm_model <- gbm_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                          overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+**pre_ltx vs post_ltx**
+
+```{r, warning=FALSE}
+group <- c("pre_ltx","post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+gbm_model <- gbm_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                          overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+**post_ltx vs healthy**
+
+```{r, warning=FALSE}
+group <- c("post_ltx","healthy")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, warning=FALSE}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+gbm_model <- gbm_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q1",
+                          overfitting_check = TRUE)
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+
+#### Saving results
+
+```{r, warning=FALSE}
+models_list <- list()
+
+for (model_name in names(supplements_models$models_summ)){
+  df <- do.call(rbind, supplements_models$models_summ[[model_name]])
+  models_list[[model_name]] <- df
+}
+
+write.xlsx(models_list,
+           file=file.path(path,paste0("supplements_models_",segment,".xlsx")),
+           rowNames=TRUE)
+
+```
+
+# Overview
+
+```{r, warning=FALSE}
+models_summ_df <- do.call(rbind, 
+  models_summ)
+```
+
+```{r, warning=FALSE}
+# Build final dataframe
+models_list[["enet_model"]] <- models_summ_df
+final_df <- tibble(row_names = rownames(models_list[[1]]))
+
+# Loop through models and extract required values
+for (model_name in names(models_list)) {
+  model_df <- models_list[[model_name]]
+  
+  # Combine AUC_optimism_corrected with its CI values
+  final_df[[model_name]] <- paste0(
+    round(model_df$auc_optimism_corrected, 3), 
+    " (", round(model_df$auc_optimism_corrected_CIL, 3), "; ", 
+    round(model_df$auc_optimism_corrected_CIU, 3), ")"
+  )
+}
+
+# see the results
+knitr::kable(final_df, caption="All models")
+```
