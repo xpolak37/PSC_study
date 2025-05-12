@@ -37,9 +37,7 @@ If you find this code and report helpful, cite the original publication:
 
 > TO BE ADDED
 
----------------------------------------------------------------------------------------------------
-
-Data Availability:
+**Data Availability**
 - Czech cohort: 
 > SRA PRJNA1250244
 - Link to ancillary dataset (Norwegian cohort):
@@ -64,6 +62,12 @@ This project analyses biopsy samples from two cohorts (Czech and Norwegian), nam
 **Statistical analysis**
 
 > TO BE ADDED
+
+[Q1_analysis]
+[Q2_analysis]
+[Q3_analysis]
+[clinical_analysis](https://xpolak37.github.io/PSC_study/analysis/scripts/psc_study_clinical.html)
+[ML_overfitting_check]
 
 ---------------------------------------------------------------------------------------------------
 
