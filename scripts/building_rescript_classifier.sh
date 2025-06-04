@@ -1,3 +1,21 @@
+#!/bin/bash
+
+# This script serves for building a rescript taxonomic classifier from SILVA database in order to classify the taxa in the PSC study.
+
+# Requirements:
+# - qiime2
+
+# conda environment (Optional)
+conda activate /path/to/qiime_environment
+
+# set TMPDIR (Optional)
+export TMPDIR=/path/to/tmp
+
+# Set path for inputs and outputs
+path=/path/to/silva_dbs
+
+cd ${path}
+
 qiime rescript get-silva-data \
     --p-version '138.1' \
     --p-target 'SSURef_NR99' \ 
