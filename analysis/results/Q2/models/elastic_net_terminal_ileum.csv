@@ -1,3 +1,0 @@
-"","alpha","lambda","auc","auc_czech","auc_no","auc_optimism_corrected","auc_optimism_corrected_CIL","auc_optimism_corrected_CIU","accuracy","accuracy_czech","accuracy_no","accuracy_optimism_corrected","accuracy_optimism_corrected_CIL","accuracy_optimism_corrected_CIU"
-"rPSC vs non-rPSC genus terminal_ileum",0.4,0.311964481803089,0.643290043290043,0.656784188034188,0.606995884773663,0.57369335259309,0.390585735402809,0.73226171976172,0.760869565217391,NA,0.75,0.735385842342724,0.628868286445013,0.827757158006363
-"rPSC vs non-rPSC subset genus terminal_ileum",0.2,0.501724811382313,0.516017316017316,0.522435897435897,0.5,0.559929683947316,0.386355311355311,0.723220056146885,0.760869565217391,NA,0.75,0.753942232434918,0.652595385980479,0.844230769230769
