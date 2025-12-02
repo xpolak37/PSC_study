@@ -1,0 +1,1247 @@
+---
+title: "PSC article analysis Q2 CZ"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    toc_depth: 6
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+*Custom Functions*
+
+
+```{r}
+source("custom_functions.R")
+```
+
+
+# Data Import
+
+Importing ASV, taxa and metadata tables for both czech and norway
+samples.
+
+**Czech**
+
+```{r}
+path = "../../data/analysis_ready_data/ikem/"
+asv_tab_ikem <- as.data.frame(fread(file.path(path,"asv_table_ikem.csv"),
+                                    check.names = FALSE))
+taxa_tab_ikem <- as.data.frame(fread(file.path(path,"taxa_table_ikem.csv"),
+                                     check.names = FALSE))
+metadata_ikem <- as.data.frame(fread(file.path(path,"metadata_ikem.csv"),
+                                     check.names = FALSE))
+```
+
+## Spliting to segments
+
+**Terminal ileum**
+
+```{r}
+ileum_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=NULL,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=NULL,
+                           metadata_1=metadata_ikem,
+                           metadata_2=NULL,
+                           segment="TI",Q="Q2")
+
+ileum_asv_tab <- ileum_data[[1]]
+ileum_taxa_tab <- ileum_data[[2]]
+ileum_metadata <- ileum_data[[3]]
+```
+
+**Colon**
+
+```{r}
+colon_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=NULL,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=NULL,
+                           metadata_1=metadata_ikem,
+                           metadata_2=NULL,
+                           segment="colon",Q="Q2")
+
+colon_asv_tab <- colon_data[[1]]
+colon_taxa_tab <- colon_data[[2]]
+colon_metadata <- colon_data[[3]]
+```
+
+# Data Analysis - Terminal ileum
+
+```{r}
+segment="terminal_ileum"
+```
+
+## Filtering
+
+Rules: - prevalence \> 5% (per group) - nearZeroVar with default
+settings - sequencing depth \> 5000 - taxonomic assignment at least
+order
+
+**Library size**
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(ileum_asv_tab, line = c(5000,10000))
+```
+
+### Sequencing depth
+
+```{r}
+data_filt <- seq_depth_filtering(ileum_asv_tab,
+                                 ileum_taxa_tab,
+                                 ileum_metadata,
+                                 seq_depth_threshold = 10000)
+
+filt_ileum_asv_tab <- data_filt[[1]]; alpha_ileum_asv_tab <- filt_ileum_asv_tab
+filt_ileum_taxa_tab <- data_filt[[2]]; alpha_ileum_taxa_tab <- filt_ileum_taxa_tab
+filt_ileum_metadata <- data_filt[[3]]; alpha_ileum_metadata <- filt_ileum_metadata
+
+seq_step <- dim(filt_ileum_asv_tab)[1]
+```
+
+**Library size**
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_ileum_asv_tab,line = c(5000,10000))
+```
+
+### NearZeroVar
+
+```{r}
+data_filt <- nearzerovar_filtering(filt_ileum_asv_tab, 
+                                   filt_ileum_taxa_tab,
+                                   filt_ileum_metadata)
+
+filt_ileum_asv_tab <- data_filt[[1]]
+filt_ileum_taxa_tab <- data_filt[[2]]
+nearzero_step <- dim(filt_ileum_asv_tab)[1]
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_ileum_asv_tab,line = c(5000,10000))
+```
+
+### Final Counts
+
+```{r}
+final_counts_filtering(ileum_asv_tab,
+                       filt_ileum_asv_tab,
+                       filt_ileum_metadata,
+                       seq_step, 0, nearzero_step) %>% `colnames<-`("Count")
+```
+
+
+
+## Machine learning
+
+```{r}
+path = "../results/Q2_czech/models"
+# save the results
+models_summ <- list()
+models_cm <- list()
+betas <- list()
+roc_cs <- list()
+supplements_models <- list()
+```
+
+### ElasticNet
+
+```{r}
+model="enet"
+```
+
+
+#### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+##### rPSC vs non-rPSC - all
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+enet_model <- glmnet_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+
+roc_c
+```
+
+##### rPSC vs non-rPSC - subset
+
+```{r, warning=FALSE}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2]," subset")
+```
+
+```{r, warning=FALSE}
+taxa_to_test <- read.xlsx("../results/Q1_czech/univariate_analysis/significant_taxa_terminal_ileum.xlsx", sheet=" genus healthy vs pre_ltx")
+
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep_psc_effect(ileum_genus_tab,
+                                                ileum_genus_taxa_tab, 
+                                                ileum_metadata,
+                                                taxa_to_test,
+                                                usage="ml_clr")
+
+# fit the model
+enet_model <- glmnet_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+
+roc_c
+```
+
+
+#### Saving results
+
+```{r}
+models_summ_df_ileum <- do.call(rbind, 
+  models_summ[grep(segment,names(models_summ),value = TRUE)])
+
+write.csv(models_summ_df_ileum,file.path(path,paste0("elastic_net_",segment,".csv")))
+```
+
+
+### Supplementary models
+
+
+#### CLR-transformed data
+
+##### kNN
+
+```{r}
+model="knn"
+```
+
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+**rPSC vs non-rPSC - all**
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+knn_model <- knn_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+**rPSC vs non-rPSC -subset**
+
+```{r, warning=FALSE}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2]," subset")
+```
+
+```{r, warning=FALSE}
+taxa_to_test <- read.xlsx("../results/Q1_czech/univariate_analysis/significant_taxa_terminal_ileum.xlsx", sheet=" genus healthy vs pre_ltx")
+
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep_psc_effect(ileum_genus_tab,
+                                                ileum_genus_taxa_tab, 
+                                                ileum_metadata,
+                                                taxa_to_test,
+                                                usage="ml_clr")
+
+# fit the model
+knn_model <- knn_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=FALSE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+
+roc_c
+```
+
+##### Random Forest
+
+```{r}
+model="rf"
+```
+
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+**rPSC vs non-rPSC - all**
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+rf_model <- rf_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+**rPSC vs non-rPSC - subset**
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2]," subset")
+```
+
+```{r}
+taxa_to_test <- read.xlsx("../results/Q1_czech/univariate_analysis/significant_taxa_terminal_ileum.xlsx", sheet=" genus healthy vs pre_ltx")
+
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep_psc_effect(ileum_genus_tab,
+                                                ileum_genus_taxa_tab, 
+                                                ileum_metadata,
+                                                taxa_to_test,
+                                                usage="ml_clr")
+
+# fit the model
+rf_model <- rf_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=FALSE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+##### Gradient boosting
+
+```{r}
+model="gb"
+```
+
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+```
+
+**rPSC vs non-rPSC**
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep(ileum_genus_tab,
+                                     ileum_genus_taxa_tab,
+                                     ileum_metadata,
+                                     group, 
+                                     usage="ml_clr")
+
+# fit the model
+gbm_model <- gbm_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+**rPSC vs non-rPSC - subset**
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2]," subset")
+```
+
+```{r}
+taxa_to_test <- read.xlsx("../results/Q1_czech/univariate_analysis/significant_taxa_terminal_ileum.xlsx", sheet=" genus healthy vs pre_ltx")
+
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_ileum_uni_data <- binomial_prep_psc_effect(ileum_genus_tab,
+                                                ileum_genus_taxa_tab, 
+                                                ileum_metadata,
+                                                taxa_to_test,
+                                                usage="ml_clr")
+
+
+# fit the model
+gbm_model <- gbm_binomial(filt_ileum_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              reuse=FALSE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+#### Saving results
+
+```{r}
+models_list <- list()
+
+for (model_name in names(supplements_models$models_summ)){
+  df <- do.call(rbind, supplements_models$models_summ[[model_name]])
+  models_list[[model_name]] <- df
+}
+
+write.xlsx(models_list,
+           file=file.path(path,paste0("supplements_models_",segment,".xlsx")),
+           rowNames=TRUE)
+
+```
+
+
+# Analysis - Colon
+
+```{r}
+segment="colon"
+```
+
+## Filtering
+
+Rules: - prevalence \> 5% (per group) - nearZeroVar with default
+settings - sequencing depth \> 5000 - taxonomic assignment at least
+order
+
+
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(colon_asv_tab, line = c(5000,10000))
+```
+
+### Sequencing depth
+
+```{r}
+data_filt <- seq_depth_filtering(colon_asv_tab,
+                                 colon_taxa_tab,
+                                 colon_metadata,
+                                 seq_depth_threshold = 10000)
+
+filt_colon_asv_tab <- data_filt[[1]]; alpha_colon_asv_tab <- filt_colon_asv_tab
+filt_colon_taxa_tab <- data_filt[[2]]; alpha_colon_taxa_tab <- filt_colon_taxa_tab
+filt_colon_metadata <- data_filt[[3]]; alpha_colon_metadata <- filt_colon_metadata
+
+seq_step <- dim(filt_colon_asv_tab)[1]
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_colon_asv_tab,line = c(10000))
+```
+
+### NearZeroVar
+
+```{r}
+data_filt <- nearzerovar_filtering(filt_colon_asv_tab,
+                                   filt_colon_taxa_tab,
+                                   filt_colon_metadata)
+
+filt_colon_asv_tab <- data_filt[[1]]
+filt_colon_taxa_tab <- data_filt[[2]]
+nearzero_step <- dim(filt_colon_asv_tab)[1]
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_colon_asv_tab,line = c(5000,10000))
+```
+
+Check zero depth
+
+```{r}
+data_filt <- check_zero_depth(filt_colon_asv_tab, 
+                              filt_colon_taxa_tab, 
+                              filt_colon_metadata)
+
+filt_colon_asv_tab <- data_filt[[1]]; 
+filt_colon_taxa_tab <- data_filt[[2]]; 
+filt_colon_metadata <- data_filt[[3]]; 
+```
+
+Library size
+
+```{r, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+read_counts(filt_colon_asv_tab,line = c(5000,10000))
+```
+
+### Final Counts
+
+```{r}
+final_counts_filtering(colon_asv_tab,
+                       filt_colon_asv_tab,
+                       filt_colon_metadata,
+                       seq_step, 0, nearzero_step)
+```
+
+## Machine learning
+
+```{r}
+path = "../results/Q2_czech/models"
+```
+
+### ElasticNet
+
+```{r}
+model="enet"
+```
+
+
+#### Genus level
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+##### rPSC vs non-rPSC - all
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+enet_model <- glmnet_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+
+roc_c
+```
+
+##### rPSC vs non-rPSC - subset
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2]," subset")
+```
+
+```{r}
+taxa_to_test <- read.xlsx("../results/Q1_czech/univariate_analysis/significant_taxa_colon.xlsx", sheet=" genus healthy vs pre_ltx")
+
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep_psc_effect(colon_genus_tab,
+                                                colon_genus_taxa_tab, 
+                                                colon_metadata,
+                                                taxa_to_test,
+                                                usage="ml_clr",
+                                                patient=TRUE)
+
+# fit the model
+enet_model <- glmnet_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                              clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC
+roc_c <- roc_curve(enet_model, group)
+
+# save the results
+models_summ[[model_name]] <- enet_model$model_summary
+models_cm[[model_name]] <- enet_model$conf_matrices$original
+roc_cs[[model_name]] <- enet_model$kfold_rocobjs
+betas[[model_name]] <- as.matrix(enet_model$betas)
+
+# see the results
+enet_model$model_summary %>% t()
+enet_model$conf_matrices
+enet_model$plot
+
+roc_c
+```
+
+#### Saving results
+
+```{r}
+models_summ_df_colon <- do.call(rbind, 
+  models_summ[grep(segment,names(models_summ),value = TRUE)])
+
+write.csv(models_summ_df_colon,file.path(path,paste0("elastic_net_",segment,".csv")))
+```
+
+
+### Supplementary models
+
+#### CLR-transformed data
+
+##### kNN
+
+```{r}
+model="knn"
+```
+
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**rPSC vs non-rPSC - all**
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+knn_model <- knn_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+**rPSC vs non-rPSC - subset**
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2]," subset")
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+knn_model <- knn_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                          clust_var="Patient",
+                              reuse=FALSE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC curve
+roc_c <- roc_curve(knn_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["knn_model"]][[model_name]] <- knn_model$model_summary
+supplements_models[["roc_cs"]][["knn_model"]][[model_name]] <- knn_model$kfold_rocobjs
+
+
+# see the results
+knn_model$model_summary %>% t()
+roc_c
+```
+
+##### Random Forest
+
+```{r}
+model="rf"
+```
+
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**rPSC vs non-rPSC - all**
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+rf_model <- rf_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                        clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+**rPSC vs non-rPSC - subset**
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2]," subset")
+```
+
+```{r}
+taxa_to_test <- read.xlsx("../results/Q1_czech/univariate_analysis/significant_taxa_colon.xlsx", sheet=" genus healthy vs pre_ltx")
+
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep_psc_effect(colon_genus_tab,
+                                                colon_genus_taxa_tab, 
+                                                colon_metadata,
+                                                taxa_to_test,
+                                                usage="ml_clr",
+                                                patient=TRUE)
+
+# fit the model
+rf_model <- rf_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                        clust_var="Patient",
+                              reuse=FALSE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC curve
+roc_c <- roc_curve(rf_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["rf_model"]][[model_name]] <- rf_model$model_summary
+supplements_models[["roc_cs"]][["rf_model"]][[model_name]] <- rf_model$kfold_rocobjs
+
+# see the results
+rf_model$model_summary %>% t()
+roc_c
+```
+
+##### Gradient boosting
+
+```{r}
+model="gb"
+```
+
+
+```{r}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+```
+
+**rPSC vs non-rPSC - all**
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r}
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep(colon_genus_tab,
+                                     colon_genus_taxa_tab,
+                                     colon_metadata,
+                                     group, 
+                                     usage="ml_clr",
+                                     patient = TRUE)
+
+# fit the model
+gbm_model <- gbm_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                          clust_var="Patient",
+                              reuse=TRUE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+**rPSC vs non-rPSC - subset**
+
+```{r}
+group <- c("rPSC","non-rPSC")
+comparison_name <- paste0(group[1], " vs ",group[2]," subset")
+```
+
+```{r}
+taxa_to_test <- read.xlsx("../results/Q1_czech/univariate_analysis/significant_taxa_colon.xlsx", sheet=" genus healthy vs pre_ltx")
+
+model_name <- paste(comparison_name,level,segment)
+
+# prepare the data
+filt_colon_uni_data <- binomial_prep_psc_effect(colon_genus_tab,
+                                                colon_genus_taxa_tab, 
+                                                colon_metadata,
+                                                taxa_to_test,
+                                                usage="ml_clr",
+                                                patient=TRUE)
+
+# fit the model
+gbm_model <- gbm_binomial(filt_colon_uni_data,
+                              sample_method = "atypboot",
+                              outcome="Group", 
+                              N=500,
+                          clust_var="Patient",
+                              reuse=FALSE,
+                              file=model_name,
+                              Q="Q2_czech")
+
+# ROC curve
+roc_c <- roc_curve(gbm_model, group)
+
+# save the results
+supplements_models[["models_summ"]][["gbm_model"]][[model_name]] <- gbm_model$model_summary
+supplements_models[["roc_cs"]][["gbm_model"]][[model_name]] <- gbm_model$kfold_rocobjs
+
+# see the results
+gbm_model$model_summary %>% t()
+roc_c
+```
+
+
+#### Saving results
+
+```{r}
+models_list <- list()
+
+for (model_name in names(supplements_models$models_summ)){
+  df <- do.call(rbind, supplements_models$models_summ[[model_name]])
+  models_list[[model_name]] <- df
+}
+
+write.xlsx(models_list,
+           file=file.path(path,paste0("supplements_models_",segment,".xlsx")),
+           rowNames=TRUE)
+
+```
+
+## Results overview
+
+
+#### Machine learning
+
+**Main models**
+
+Summary
+
+```{r}
+knitr::kable(models_summ_df_colon %>% dplyr::select(
+"alpha","lambda",
+"auc_optimism_corrected",
+"auc_optimism_corrected_CIL",
+"auc_optimism_corrected_CIU"),
+             digits=3,caption="Elastic net results")
+```
+
+**ROC - ASV level**
+
+```{r}
+roc_curve_all_custom(roc_cs[c(5:8)], 
+                     Q="Q2_czech",
+                     model_name="enet_model")
+```
+
+**ROC - Genus level**
+
+```{r, eval=FALSE}
+roc_curve_all_custom(roc_cs[c(13:16)],Q="Q2_czech",
+                     model_name="enet_model")
+```
+
+**Supplementary models**
+
+Summary
+
+```{r}
+# Build final dataframe
+models_list[["enet_model"]] <- rbind(models_summ_df_ileum,models_summ_df_colon)
+final_df <- tibble(row_names = rownames(models_list[[1]]))
+
+# Loop through models and extract required values
+for (model_name in names(models_list)) {
+  model_df <- models_list[[model_name]]
+  
+  # Combine AUC_optimism_corrected with its CI values
+  final_df[[model_name]] <- paste0(
+    round(model_df$auc_optimism_corrected, 3), 
+    " (", round(model_df$auc_optimism_corrected_CIL, 3), "; ", 
+    round(model_df$auc_optimism_corrected_CIU, 3), ")"
+  )
+}
+
+knitr::kable(final_df, caption="All models")
+write.csv(final_df,file=file.path(path,"AUC_all_models.csv"),row.names = FALSE)
+```
+
+ROC - ASV
+
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+rocs_list <- supplements_models$roc_cs
+rocs_list[["enet_model"]] <- roc_cs
+
+plot_list <- list()
+
+for (model_name in names(rocs_list)) {
+  plot_list[[model_name]] <- roc_curve_all_custom(rocs_list[[model_name]][c(1:4)],
+                       Q="Q2_czech",
+                       model_name=model_name)
+}
+
+ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=7))
+```
+
+ROC - genus
+
+```{r, fig.width=10, fig.height=8, fig.fullwidth=TRUE}
+plot_list <- list()
+
+for (model_name in names(rocs_list)) {
+  plot_list[[model_name]] <- roc_curve_all_custom(rocs_list[[model_name]][c(5:8)],
+                       Q="Q2_czech",
+                       model_name=model_name)
+}
+
+p <- ggarrange(plotlist = plot_list,labels = names(rocs_list),font.label = list(face="plain",size=7))
+```
+
+```{r,results='hide'}
+pdf("../figures/Q2_czech/models_colon.pdf",
+    height =10,width = 10)
+p
+dev.off()
+```

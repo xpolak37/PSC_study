@@ -467,10 +467,16 @@ write.csv(alpha_data,file.path(path,paste0("alpha_indices_",segment,".csv")),
           row.names = FALSE)
 ```
 
+```{r}
+alpha_data <- read.csv(file.path(path,paste0("alpha_indices_",segment,".csv")))
+```
+
 ### Plots
 
 ```{r, fig.width=4, fig.height=5, fig.fullwidth=TRUE}
-p_boxplot_alpha <- alpha_diversity_countries(alpha_data,show_legend = FALSE)
+p_boxplot_alpha <- alpha_diversity_countries(alpha_data,
+                                             show_legend = TRUE,
+                                             size=1,gap=FALSE)
 
 # save the results
 alpha_div_plots[[paste(segment,"Country")]] <- p_boxplot_alpha
@@ -748,7 +754,7 @@ p
 dev.off()
 ```
 
-#### PCA + correlations
+#### PCA + correlations ???
 
 ```{r}
 variables= c("Calprotectin","Nancy_max","eMAYO","MAYO_dai")

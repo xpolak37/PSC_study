@@ -37,7 +37,6 @@ suppressMessages(suppressWarnings({
   library(kableExtra)
   library(tidyverse)
   library(picante)
-  library(tidyr)
   library(mice)
 }))
 
@@ -130,12 +129,17 @@ merging_data <- function(asv_tab_1, asv_tab_2,
   # list(asv_table, taxa_table, metadata) - newly created dataset
   
   if ("segment" %in% colnames(metadata_1)){
-    metadata_1 <- metadata_1 %>% dplyr::rename(Matrix=segment)
+    metadata_1 <- metadata_1 %>% dplyr::rename(Matrix="segment")
+  }
+  
+  if ("segment" %in% colnames(metadata_2)){
+    metadata_2 <- metadata_2 %>% dplyr::rename(Matrix="segment")
   }
 
   # TAB 1
   if (segment=="TI") metadata_1 <- metadata_1[metadata_1$Matrix == segment,]
-  else if (segment=="colon") metadata_1 <- metadata_1[metadata_1$Matrix %in% c("Cecum","Rectum","CD","CA","CD","SI"),]
+  else if (segment=="right_colon") metadata_1 <- metadata_1[metadata_1$Matrix %in% c("Cecum","CA"),]
+  else if (segment=="left_colon") metadata_1 <- metadata_1[metadata_1$Matrix %in% c("Rectum","CD","SI"),]
   asv_tab_1 <- asv_tab_1[,c(TRUE,colnames(asv_tab_1)[-1] %in% metadata_1$SampleID)]
   taxa_tab_1 <- taxa_tab_1[taxa_tab_1$SeqID %in% asv_tab_1$SeqID,]
   
@@ -145,8 +149,9 @@ merging_data <- function(asv_tab_1, asv_tab_2,
   
   if (!is.null(asv_tab_2)){
     # TAB 2
-    if (segment=="TI") metadata_2 <- metadata_2[metadata_2$segment == segment,]
-    else if (segment=="colon")  metadata_2 <- metadata_2[metadata_2$segment %in% c("CA","CD","SI"),]
+    if (segment=="TI") metadata_2 <- metadata_2[metadata_2$Matrix == segment,]
+    else if (segment=="right_colon") metadata_2 <- metadata_2[metadata_2$Matrix %in% c("Cecum","CA"),]
+    else if (segment=="left_colon") metadata_2 <- metadata_2[metadata_2$Matrix %in% c("Rectum","CD","SI"),]    
     asv_tab_2 <- asv_tab_2[,c(TRUE,colnames(asv_tab_2)[-1] %in% metadata_2$SampleID)]
     taxa_tab_2 <- taxa_tab_2[taxa_tab_2$SeqID %in% taxa_tab_2$SeqID,]
     
@@ -159,14 +164,17 @@ merging_data <- function(asv_tab_1, asv_tab_2,
     merged_taxa_tab <- merging_taxa_tables(taxa_tab_1,taxa_tab_2)
     
     # metadata merge
-    if (Q=="Q5"){
+    if (Q=="Q5" | Q=="Q5b"){
      merged_metadata <- rbind(metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country, Calprotectin),
-                             metadata_2 %>% dplyr::select(SampleID,subjectid,Group,segment,Country, Calprotectin) %>% 
-                               dplyr::rename(Patient=subjectid,Matrix=segment) %>%
+                             metadata_2 %>% dplyr::select(SampleID,subjectid,Group,Matrix,Country, Calprotectin) %>% 
+                               dplyr::rename(Patient=subjectid) %>%
                                mutate(Patient=paste0("NO_",Patient))) 
+    } else if (Q=="QALD"){
+      merged_metadata <- rbind(metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country),
+                               metadata_2 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country))
     } else{
       merged_metadata <- rbind(metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country),
-                               metadata_2 %>% dplyr::select(SampleID,subjectid,Group,segment,Country) %>% dplyr::rename(Patient=subjectid,Matrix=segment) %>%
+                               metadata_2 %>% dplyr::select(SampleID,subjectid,Group,Matrix,Country) %>% dplyr::rename(Patient=subjectid) %>%
                                  mutate(Patient=paste0("NO_",Patient))) 
     }
     
@@ -179,10 +187,10 @@ merging_data <- function(asv_tab_1, asv_tab_2,
     
     # metadata merge
     if ("Patient" %in% colnames(metadata_1)){
-      if (Q=="Q5")  merged_metadata <- metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country, Calprotectin)
+      if (Q=="Q5" | Q=="Q5b")  merged_metadata <- metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country, Calprotectin)
       else merged_metadata <- metadata_1 %>% dplyr::select(SampleID,Patient,Group,Matrix,Country)
     } else {
-      if (Q=="Q5") {merged_metadata <- metadata_1 %>% 
+      if (Q=="Q5" | Q=="Q5b") {merged_metadata <- metadata_1 %>% 
         dplyr::select(SampleID,subjectid,Group,Matrix,Country, Calprotectin) %>% 
         dplyr::rename(Patient=subjectid) %>%
         mutate(Patient=paste0("NO_",Patient))}
@@ -211,8 +219,32 @@ merging_data <- function(asv_tab_1, asv_tab_2,
     # keep only rPSC vs non-rPSC vs Healthy
     merged_metadata <- merged_metadata[merged_metadata$Group %in% c("rPSC","non-rPSC","healthy"),]
   } else if (Q=="Q3"){
-    merged_metadata <- merged_metadata[merged_metadata$Group %in% c("rPSC","non-rPSC", "pre_ltx"),]
+    #merged_metadata <- merged_metadata[merged_metadata$Group %in% c("rPSC","non-rPSC", "pre_ltx"),]
+    #merged_metadata$Group <- "PSC"
+    merged_metadata <- merged_metadata[merged_metadata$Group %in% c("pre_ltx","rPSC"),]
     merged_metadata$Group <- "PSC"
+  } else if (Q=="Q3b"){
+    #merged_metadata <- merged_metadata[merged_metadata$Group %in% c("rPSC","non-rPSC", "pre_ltx"),]
+    #merged_metadata$Group <- "PSC"
+    merged_metadata <- merged_metadata[merged_metadata$Group %in% c("pre_ltx"),]
+    merged_metadata$Group <- "PSC"
+  } else if (Q=="Q5"){
+    #merged_metadata <- merged_metadata[merged_metadata$Group %in% c("rPSC","non-rPSC", "pre_ltx"),]
+    #merged_metadata$Group <- "PSC"
+    merged_metadata <- merged_metadata[merged_metadata$Group %in% c("pre_ltx","rPSC"),]
+    #merged_metadata$Group <- "PSC"
+  } else if (Q=="Q5b"){
+    #merged_metadata <- merged_metadata[merged_metadata$Group %in% c("rPSC","non-rPSC", "pre_ltx"),]
+    #merged_metadata$Group <- "PSC"
+    merged_metadata <- merged_metadata[merged_metadata$Group %in% c("pre_ltx"),]
+    #merged_metadata$Group <- "PSC"
+  } else if (Q=="QALD"){
+    merged_metadata <- merged_metadata[merged_metadata$Group %in% c("ETOH","non-rPSC","rPSC","healthy"),]
+    new_groups <- merged_metadata$Group
+    new_groups[merged_metadata$Group %in% c("healthy")] <- "HC"
+    new_groups[merged_metadata$Group %in% c("rPSC","non-rPSC")] <- "PSC post_ltx"
+    new_groups[merged_metadata$Group %in% c("ETOH")] <- "ALD post_ltx"
+    merged_metadata$Group <- new_groups
   }
   merged_asv_tab <- merged_asv_tab[,c(TRUE,colnames(merged_asv_tab)[-1] %in% merged_metadata$SampleID)]
   merged_taxa_tab <- merged_taxa_tab[merged_taxa_tab$SeqID %in% merged_asv_tab$SeqID,]
@@ -558,6 +590,31 @@ binomial_prep_psc_effect <- function(asv_table,taxa_table,metadata,df_effect, pa
   
 }
 
+aggregate_samples <- function(asv_table,taxa_table,metadata,variable){
+  # This function aggregates abundances at different taxonomic levels.
+  # It is used in every function with parameter 'taxonomic_level', where
+  # various taxonomic levels can be considered.
+  # inputs:
+  # asv_table - ASV table with 'SeqID'
+  # taxa_table - Taxonomy with 'SeqID' and taxonomy
+  # taxonomic_level - aggregate to which level
+  # names=TRUE - boolean indicating if 'SeqID' should be returned, several functions
+  # do not require the IDs, so this column can be discarded
+  # outputs:
+  # list with new asv table and taxa table
+  # available taxa ranks
+  
+  # merge asv and taxa table, this table is than used for aggregating
+  group_asv_table <- data.frame(SeqID=taxa_table$SeqID)
+  unique_values_variable <- unique(metadata[,variable])
+  for (value in unique_values_variable){
+    samples <- metadata$SampleID[metadata[,variable]==value]
+    group_sums <- rowSums(asv_table[,samples])
+    group_asv_table[,value] <- group_sums
+  }
+  
+  return(group_asv_table)
+}
 
 ## Filtering functions ----
 
@@ -724,7 +781,183 @@ final_counts_filtering <- function(asv_tab,filt_asv_tab,filt_metadata,
 
 ## Statistical testing ----
 
-pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
+bootstrap_lm <- function(formula,data,sub_co,N=100){
+  
+  # Function to pick one random observation per patient and fit model
+  fit_once <- function(formula,data,sub_co) {
+    data_sampled <- data %>%
+      group_by(Patient) %>%
+      slice_sample(n = 1) %>%
+      ungroup()
+    
+    model <- coef(summary(lm(as.formula(formula), data = data_sampled)))
+    model <- glm_renaming(model,sub_co)
+    return(as.data.frame(model) %>% rownames_to_column("Comparison"))
+  }
+  
+  # Run the model 5 times with random sampling
+  set.seed(123)  # for reproducibility
+  models_df <- map_dfr(1:N, ~ fit_once(formula, data, sub_co), .id = "rep")
+  
+  # Convert to long format for easier summarization
+  results_summary <- models_df %>%
+    group_by(Comparison) %>%
+    summarise(
+      Estimate = mean(Estimate, na.rm = TRUE),
+      `Std. Error` = mean(`Std. Error`, na.rm = TRUE),
+      `t value` = mean(`t value`,na.rm=TRUE),
+       `Pr(>|t|)` = max(`Pr(>|t|)`, na.rm = TRUE),  # optional, just to inspect
+      .groups = "drop"
+    )
+  
+  return(results_summary %>% column_to_rownames("Comparison"))
+
+}
+
+bootstrap_linda <- function(uni_data,uni_metadata, formula, group, N){
+  # Function to pick one random observation per patient and fit model
+  fit_once <- function(formula,uni_data,uni_metadata,group) {
+    uni_metadata %<>% rownames_to_column("SampleID") 
+    metadata_sampled <- uni_metadata %>%
+      group_by(Patient) %>%
+      slice_sample(n = 1) %>%
+      ungroup()
+    
+    data_sampled <- uni_data[,metadata_sampled$SampleID]
+    
+    linda.obj <- linda(data_sampled, metadata_sampled,
+                       formula = formula)
+    
+    linda.output <- linda.obj$output
+    linda.output <- linda_renaming(linda.output, group)
+    
+    for (name in names(linda.output)){
+      linda.output[[name]] %<>% rownames_to_column("SeqID")
+    }
+    return(linda.output)
+  }
+  
+  # Run the model 5 times with random sampling
+  set.seed(123)  # for reproducibility
+  
+  # Preallocate lists to collect each of the 3 dataframes
+  fits <- fit_once(formula,uni_data,uni_metadata,group)
+  df_names <- names(fits)
+  
+  # Create empty lists, one per df type
+  combined_dfs <- setNames(vector("list", length(df_names)), df_names)
+  
+  # Loop over reps
+  for (i in seq_len(N)) {
+    res <- fit_once(formula,uni_data,uni_metadata,group)
+    
+    # Append rep number and store each dataframe
+    for (name in df_names) {
+      tmp <- res[[name]]
+      tmp$rep <- i
+      combined_dfs[[name]] <- rbind(combined_dfs[[name]], tmp)
+    }
+  }
+  
+  # Convert
+  for (name in names(combined_dfs)){
+    results_summary <- combined_dfs[[name]] %>%
+      group_by(SeqID) %>%
+      summarise(
+        baseMean=mean(baseMean, na.rm = TRUE),
+        log2FoldChange=mean(log2FoldChange, na.rm = TRUE),
+        lfcSE= mean(lfcSE,na.rm = TRUE),
+        stat= mean(stat,na.rm = TRUE),
+        pvalue= mean(pvalue,na.rm = TRUE),
+        padj = mean(padj,na.rm=TRUE),
+        reject = NA,
+        df = mean(df,na.rm=TRUE),
+        .groups = "drop")
+    results_summary$reject <- ifelse(results_summary$padj<0.05,TRUE,FALSE)
+    
+    combined_dfs[[name]] <- as.data.frame(results_summary %>% column_to_rownames("SeqID"))
+  }
+  
+  return(combined_dfs)
+}
+
+bootstrap_maaslin <- function(input_data,input_metadata,output,
+                              fixed_effects = c('Group', 'Country'),
+                              N){
+
+  # Function to pick one random observation per patient and fit model
+  fit_once <- function(input_data,input_metadata,output,
+                       fixed_effects = c('Group', 'Country')) {
+    input_metadata %<>% rownames_to_column("SampleID") 
+    metadata_sampled <- input_metadata %>%
+      group_by(Patient) %>%
+      slice_sample(n = 1) %>%
+      ungroup() %>%
+      column_to_rownames("SampleID")
+    
+    data_sampled <- input_data[,rownames(metadata_sampled)]
+    
+    fit_data = Maaslin2(
+      input_data = data_sampled, 
+      input_metadata = metadata_sampled, min_abundance = 0,
+      min_prevalence = 0, min_variance = 0,
+      output = output, 
+      max_significance = 0.05,
+      fixed_effects = fixed_effects,
+      correction = "BH")
+    
+
+    return(fit_data)
+  }
+  
+  # Run the model 5 times with random sampling
+  set.seed(123)  # for reproducibility
+  
+  log_file <- file(tempfile(), open = "wt")
+  sink(log_file)  # Redirect standard output
+  sink(log_file, type = "message")  # Redirect messages and warnings
+  
+  # Preallocate lists to collect each of the 3 dataframes
+  fits <- fit_once(input_data,input_metadata,output,
+                   fixed_effects = fixed_effects)
+  
+  # Create empty lists, one per df type
+  combined_df <- fits$results %>%
+    dplyr::mutate(rep=1)
+  
+  # Loop over reps
+  for (i in seq_len(N)[-1]) {
+    res <- fit_once(input_data,input_metadata,output,
+                    fixed_effects = fixed_effects)
+    
+    tmp <- res$results
+    tmp$rep <- i
+    combined_df <- rbind(combined_df, tmp)
+
+  }
+  sink()  # Restore standard output
+  sink(type = "message")  # Restore messages
+  
+  results_summary <- combined_df %>%
+    group_by(feature,metadata) %>%
+    summarise(
+        value=unique(value),
+        coef=mean(coef, na.rm = TRUE),
+        stderr=mean(stderr, na.rm = TRUE),
+        pval= mean(pval,na.rm = TRUE),
+        name=unique(name),
+        qval= mean(qval,na.rm = TRUE),
+        N = mean(N,na.rm=TRUE),
+        N.not.zero = mean(N.not.zero,na.rm=TRUE),
+        .groups = "drop")
+    
+  fits$results <- results_summary 
+  
+  return(fits)
+}
+
+pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH',
+                        bootstraps=FALSE, N=100)
 {
   # Runs linear model (LM) for each pairwise comparison of groups in input and
   # performs the BH correction (or any other set by user). 
@@ -738,6 +971,7 @@ pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
   # outputs:
   # (list(df,emeans_models, means)): dataframe with results, emeans results when 
   # posthoc analysis was needed
+  
   
   set.seed(123)
   #co <- combn(unique(as.character(factors)),2)
@@ -772,9 +1006,13 @@ pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
     x_sub <- data[factors %in% c(co[1,elem],co[2,elem]),]
     x_sub$Group <- factor(x_sub$Group)
     x_sub$Group <- relevel(x_sub$Group,co[1,elem])
-    group <- paste(co[1,elem],"vs",co[2,elem])
-    model <- coef(summary(lm(as.formula(formula), data = x_sub)))
-    model <- glm_renaming(model,c(co[1,elem],co[2,elem]))
+    if (bootstraps) {
+      model <- bootstrap_lm(formula,x_sub,c(co[1,elem],co[2,elem]),N)
+    } else {
+      group <- paste(co[1,elem],"vs",co[2,elem])
+      model <- coef(summary(lm(as.formula(formula), data = x_sub)))
+      model <- glm_renaming(model,c(co[1,elem],co[2,elem]))
+    }
     mean_group <- model[1,]
     if (nrow(model)>2){
       if (model[4,"Pr(>|t|)"]<0.1){
@@ -788,20 +1026,17 @@ pairwise.lm <- function(formula,factors,data, p.adjust.m ='BH')
     means <- rbind(mean_group,means)
   }
   
-  rownames(means) <- co[1,]
   models <- models[-grep("^[(].+[)]$", names),]
   if (!is.data.frame(models)) models %<>% as.data.frame() %>% `row.names<-`(names[-grep("^[(].+[)]$", names)])
   if (ncol(co)>1){
     p.adjusted <- p.adjust(models[,"Pr(>|t|)"],method=p.adjust.m)
     models$p.adj <- p.adjusted
     sig = c(rep('',length(p.adjusted)))
-  sig[p.adjusted <= 0.05] <-'*'
-  sig[p.adjusted <= 0.01] <-'**'
-  sig[p.adjusted <= 0.001] <-'***'
-  df <- data.frame(models,
-                   sig=sig)
+    sig[p.adjusted <= 0.05] <-'*'
+    sig[p.adjusted <= 0.01] <-'**'
+    sig[p.adjusted <= 0.001] <-'***'
+    df <- data.frame(models, sig=sig)
   } else df <- models
-  
   
   return(list(df,emeans_models, means))
   
@@ -847,7 +1082,7 @@ pairwise.lmer <- function(formula,factors,data, p.adjust.m ='BH')
     x_sub$Group <- factor(x_sub$Group)
     x_sub$Group <- relevel(x_sub$Group,co[1,elem])
     group <- paste(co[1,elem],"vs",co[2,elem])
-    model <- coef(summary(lmer(as.formula(formula), data = x_sub)))
+    model <- coef(summary(lmer(as.formula(formula), data = x_sub, REML=FALSE)))
     model <- lmer_renaming(model,c(co[1,elem],co[2,elem]))
     mean_group <- model[1,]
     if (nrow(model)>2){
@@ -1474,7 +1709,8 @@ alpha_diversity_custom_2 <- function(alpha_data, size=1.5,width=0.2){
   return(p)
 }
   
-alpha_diversity_countries <-function(alpha_data,show_legend=FALSE){
+alpha_diversity_countries <-function(alpha_data,show_legend=FALSE, 
+                                     size=0.5,gap=TRUE){
   # Generates a scatterplot + boxplot showing the alpha diversity indices 
   # (Richness and Shannon) for each country individually
   # inputs:
@@ -1503,8 +1739,8 @@ alpha_diversity_countries <-function(alpha_data,show_legend=FALSE){
     #colors <- c("#1B7837","#B2182B")  
     #colors <- c("#D04E36", "#3F7D3C")  
     colors <- c("#A06A2C", "#B2182B")  
-
-    alpha_data$Group <- factor(alpha_data$Group,levels = c("no_ibd","ibd"))
+    alpha_data$Group <- gsub("ibd","IBD",alpha_data$Group)
+    alpha_data$Group <- factor(alpha_data$Group,levels = c("no_IBD","IBD"))
   } else if ("low" %in% alpha_data$Group){
     #colors <- c("#1B7837","#B2182B")  
     #colors <- c("#D04E36", "#3F7D3C")  
@@ -1518,13 +1754,15 @@ alpha_diversity_countries <-function(alpha_data,show_legend=FALSE){
   alpha_data$Country <- factor(alpha_data$Country,levels = c('CZ','NO'))
   alpha_richness_data <- melt(alpha_data) %>% dplyr::filter(variable=="Observe")
   
-  richness_limit <- max(alpha_data$Observe) + 0.2*max(alpha_data$Observe)
+  richness_limit <- max(alpha_data$Observe)
+  if (gap) richness_limit <- richness_limit + 0.2*max(alpha_data$Observe)
   
   p_richness <- ggplot(alpha_richness_data, aes(x=Group, y=value, fill=Country)) + 
-    geom_boxplot(aes(fill=Country), outlier.shape = NA, position=position_dodge(width=0.8)) + 
+    geom_boxplot(aes(fill=Country), outlier.shape = NA, 
+                 position=position_dodge(width=0.8), show.legend = FALSE) + 
     geom_jitter(aes(x=Group, y=value, color=Group, shape=Country), 
                 position=position_jitterdodge(jitter.width=0.7, dodge.width=0.8), 
-                size=0.5) + 
+                size=size) + 
     scale_color_manual(values=colors) +
     scale_fill_manual(values=c("#ffffff","#ffffff")) +
     theme_minimal() + 
@@ -1540,13 +1778,16 @@ alpha_diversity_countries <-function(alpha_data,show_legend=FALSE){
     theme(axis.text.x = element_text(angle = 45,vjust = 0.5))
   
   alpha_shannon_data <- melt(alpha_data) %>% dplyr::filter(variable=="Shannon")
-  shannon_limit <- max(alpha_data$Shannon) + 0.2*max(alpha_data$Shannon)
+
+    shannon_limit <- max(alpha_data$Shannon)
+  if (gap) shannon_limit <- shannon_limit + 0.2*max(alpha_data$Shannon)
   
   p_shannon <- ggplot(alpha_shannon_data, aes(x=Group, y=value, fill=Country)) + 
-    geom_boxplot(aes(fill=Country), outlier.shape = NA, position=position_dodge(width=0.8)) + 
+    geom_boxplot(aes(fill=Country), outlier.shape = NA, 
+                 position=position_dodge(width=0.8),show.legend = FALSE) + 
     geom_jitter(aes(x=Group, y=value, color=Group, shape=Country), 
                 position=position_jitterdodge(jitter.width=0.7, dodge.width=0.8), 
-                size=0.5) + 
+                size=size) + 
     scale_color_manual(values=colors) +
     scale_fill_manual(values=c("#ffffff","#ffffff")) +
     theme_minimal() + 
@@ -2000,7 +2241,6 @@ is_dna_sequence <- function(sequence) {
   }
 }
 
-
 heatmap_linda <- function(linda.output,taxa_tab){
   # Generates a heatmap showing the significant taxa in DAA with 
   # the significance information and logfoldchange color-coding
@@ -2016,7 +2256,7 @@ heatmap_linda <- function(linda.output,taxa_tab){
   groups <- rep(groups, each = 2)
   
   # Convert rownames to a column
-  linda.output <- map(linda.output, ~ .x %>% rownames_to_column("SeqID"))
+  linda.output <- purrr::map(linda.output, ~ .x %>% rownames_to_column("SeqID"))
   
   # Perform full outer join on the list of dataframes
   linda.output <- purrr::reduce(linda.output, full_join, by = "SeqID")
@@ -2142,7 +2382,7 @@ dot_heatmap_linda <- function(raw_linda, uni_list,
     }, wanted_list, uni_list)
     
     
-    names(raw_linda) <- gsub("(terminal_ileum)|(colon)|(ASV)|(genus)","",names(raw_linda))
+    names(raw_linda) <- gsub("(terminal_ileum)|(right_colon)|(left_colon)|(ASV)|(genus)","",names(raw_linda))
     names(raw_linda) <- gsub("^ +","",names(raw_linda))
     
     groups <- names(raw_linda)
@@ -2300,13 +2540,14 @@ dot_heatmap_linda <- function(raw_linda, uni_list,
                                         levels=c("non-rPSC vs HC","rPSC vs HC","rPSC vs non-rPSC"))
   }
   
+  # ATTENTION - NEEDS TO AGJUST 7.1 - 7.3
   p <- ggplot(plot_df_combined, aes(x = Variable, y = SeqID)) +
     geom_point(aes(size = median_clr, fill = log2FoldChange, color=log2FoldChange), shape = 21) +
     geom_text(aes(label = Significance,vjust=0.6), color = "black", size = 2) +  # Add asterisks for significant points
     #geom_text(aes(label = effect,vjust=0.6), color = "black", size = 2,) +
     #scale_size_continuous(name = "Median clr") +
     scale_size_continuous(name = "Median clr",range = c(1, 5), 
-                          limits = c(-5, 7.1),
+                          limits = c(-5, 7.3),
                           breaks = c(-5, -2.5, 0, 2.5, 5)) +
     scale_fill_gradient2(name = "log2FoldChange", low = "blue", mid = "white", high = "red", midpoint = 0,
                          limits = c(-5.5, 5.5)) +
@@ -2314,7 +2555,7 @@ dot_heatmap_linda <- function(raw_linda, uni_list,
                           limits = c(-5.5, 5.5)) +
     #scale_color_manual(values = "black")
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) #+
+    theme(axis.text.x = element_text(angle = 35, hjust = 1)) #+
     #labs(title = "LinDA's log2FoldChange, Significance and median clr value") 
   
   return(p)
@@ -2375,7 +2616,6 @@ volcano_plot_linda <- function(linda.output,group,taxa_table,cutoff.pval=0.05, c
   return(p)
 }
 
-
 volcano_plot_maaslin <- function(maaslin_output,taxa_table,cutoff.pval=0.05, cutoff.lfc=1,variable="Group"){
   # Generates a volcano showing the significant taxa in Maaslin 
   # inputs:
@@ -2391,6 +2631,7 @@ volcano_plot_maaslin <- function(maaslin_output,taxa_table,cutoff.pval=0.05, cut
   output <- maaslin_output$results
   output <- output[output$metadata==variable,c(1,4,5,6,8)]
   
+
   lfc <- output$coef
   padj <- output$qval
   
@@ -2656,18 +2897,18 @@ roc_curve_all_custom <- function(objects,Q,model_name,legend=TRUE){
   if (legend){
     if (TRUE %in% grepl("post_ltx",names(objects))){
       legend_data <- data.frame(
-        color = gsub("(terminal_ileum)|(colon)|(Genus)|(ASV)","",names(objects)),
+        color = gsub("(terminal_ileum)|(right_colon)|(left_colon)|(genus)|(ASV)","",names(objects)),
         value = c(3,1,2),
         color_hex <- colors
       )
     } else if (TRUE %in% grepl("rPSC",names(objects))){
       legend_data <- data.frame(
-        color = gsub("(terminal_ileum)|(colon)|(Genus)|(ASV)","",names(objects)),
+        color = gsub("(terminal_ileum)|(right_colon)|(left_colon)|(genus)|(ASV)","",names(objects)),
         value = c(2,3,4,1),
         color_hex <- colors)
     } else{
       legend_data <- data.frame(
-        color = gsub("(terminal_ileum)|(colon)|(Genus)|(ASV)","",names(objects)),
+        color = gsub("(terminal_ileum)|(right_colon)|(left_colon)|(genus)|(ASV)","",names(objects)),
         value = c(1),
         color_hex <- colors)
     }

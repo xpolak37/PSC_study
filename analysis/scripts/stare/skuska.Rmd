@@ -1,0 +1,234 @@
+---
+title: "Halo halo TITLE"
+subtitle: "Halo halo subtitle"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    toc-expand: 6
+    toc_depth: 6
+    embed-resources: true
+    keep-md: false
+    toc-location: left
+    number-sections: true
+    number-depth: 6
+    code-fold: true
+    code-tools: true
+    code-summary: "Open code"
+theme: darkly
+highlight-style: github-dark
+fontsize: 12 px
+code-block-bg: "#2D2D31"
+fontcolor: "#D1D1D1"
+monobackgroundcolor: "#3B3B3B"
+---
+
+
+------------------------------------------------------------------------
+
+
+# 1. Hypothesis: PSC is associated with the gut microbiome changes.
+
+## Introduction
+
+**Pre_LTx vs Post_LTx vs Healthy analysis on merged data**
+
+-   Alpha diversity – Richness, Shannon, Simpson, and Pielou indices
+    tested by linear fixed effect or mixed effect model (group effect,
+    country effect, interaction effect)
+
+-   Beta diversity – PERMANOVA (group effect, country effect,
+    interaction effect), PCA visualization
+
+-   Differential abundance testing:
+
+    -   o Group effect – linDA + MaAsLin2 intersection
+
+    -   o Country effect – taxa with significant interaction effect were
+        excluded based on individual post-hoc analysis. Taxa had to have
+        the same direction in both countries
+
+-   ML models, trained and validated using out-of-sample bootstrap (500
+    resamplings):
+
+   o ENET
+
+   o kNN
+
+   o GBoost
+
+   o RF
+
+------------------------------------------------------
+
+Pairwise comparisons:
+
+**Pre_ltx vs Healthy** – an effect of disease, liver cirrhosis and
+overall bad clinical condition
+
+**Pre_ltx vs post_ltx** – an effect of transplantation + general
+improvement of the clinical state
+
+**Post_ltx vs Healthy** – does LTx lead to „healthy microbiome”?
+
+**Report structure** The analysis is divided into two segments: terminal
+ileum and colon. Each part begins with data filtering, where sequencing
+depth is assessed and nearZeroVar() is applied to remove taxa with no
+variance in the dataset. This is followed by a series of analytical
+steps:
+
+1.  Alpha diversity
+
+2.  Beta diversity
+
+3.  Univariate testing
+
+4.  Machine learning models training and validation
+
+At the end of the analysis, a brief summary of the results is provided.
+
+**Importing libraries and custom functions built for this analysis**
+
+```{r,warning=FALSE}
+source("custom_functions.R")
+```
+
+## Clinical characteristics
+
+```{r,warning=FALSE}
+clinical_char <- read.xlsx("../results/clinical_characteristics.xlsx",
+                           colNames = FALSE)
+colnames(clinical_char) <- clinical_char[3,]
+clinical_char <- clinical_char[-c(1,2,3),]
+header_groups <- c(" " = 2, "HC" = 2, "pre_LTx" = 2, "post_LTx_non-rPSC"=2, "post_LTx_rPSC"=2)
+```
+
+```{r,warning=FALSE}
+knitr::kable(clinical_char, align="l", escape=FALSE,digits=3) %>% 
+  kable_styling(bootstrap_options = c("hover", "striped", "responsive")) %>% 
+  kable_styling(full_width = TRUE) %>%
+  add_header_above(header_groups)
+```
+
+## Data Import
+
+Importing ASV, taxa and metadata tables for both Czech and Norway
+samples.
+
+**Czech**
+
+```{r,warning=FALSE}
+path = "../../data/analysis_ready_data/ikem/"
+asv_tab_ikem <- as.data.frame(fread(file.path(path,"asv_table_ikem.csv"),
+                                    check.names = FALSE))
+taxa_tab_ikem <- as.data.frame(fread(file.path(path,"taxa_table_ikem.csv"),
+                                     check.names = FALSE))
+metadata_ikem <- as.data.frame(fread(file.path(path,"metadata_ikem.csv"),
+                                     check.names = FALSE))
+```
+
+**Norway**
+
+```{r,warning=FALSE}
+path = "../../data/analysis_ready_data/norway/"
+asv_tab_norway <- as.data.frame(fread(file.path(path,"asv_table_norway.csv"),
+                                    check.names = FALSE))
+taxa_tab_norway <- as.data.frame(fread(file.path(path,"taxa_table_norway.csv"),
+                                    check.names = FALSE))
+metadata_norway <- as.data.frame(fread(file.path(path,"metadata_norway.csv"),
+                                    check.names = FALSE))
+```
+
+## Merging
+
+Merging two countries based on the different matrices - Ileum, Colon.
+
+**Terminal ileum**
+
+```{r,warning=FALSE}
+ileum_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=asv_tab_norway,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=taxa_tab_norway,
+                           metadata_1=metadata_ikem,
+                           metadata_2=metadata_norway,
+                           segment="TI",Q="Q1")
+
+ileum_asv_tab <- ileum_data[[1]]
+ileum_taxa_tab <- ileum_data[[2]]
+ileum_metadata <- ileum_data[[3]]
+```
+
+**Reads statistics**
+
+```{r,warning=FALSE}
+summary(colSums(ileum_asv_tab[,-1]))
+```
+
+**Colon**
+
+```{r,warning=FALSE}
+colon_data <- merging_data(asv_tab_1=asv_tab_ikem,
+                           asv_tab_2=asv_tab_norway,
+                           taxa_tab_1=taxa_tab_ikem,
+                           taxa_tab_2=taxa_tab_norway,
+                           metadata_1=metadata_ikem,
+                           metadata_2=metadata_norway,
+                           segment="colon",Q="Q1")
+
+colon_asv_tab <- colon_data[[1]]
+colon_taxa_tab <- colon_data[[2]]
+colon_metadata <- colon_data[[3]]
+```
+
+**Reads statistics**
+
+```{r,warning=FALSE}
+summary(colSums(colon_asv_tab[,-1]))
+```
+
+# Data Analysis - Terminal ileum
+
+```{r,warning=FALSE}
+segment="terminal_ileum"
+```
+
+## Filtering
+
+Rules:
+
+-   sequencing depth \> 10000
+
+-   nearZeroVar() with default settings
+
+**Rarefaction Curve**
+
+```{r,warning=FALSE}
+path="../intermediate_files/rarecurves"
+seq_depth_threshold <- 10000
+```
+
+```{r, warning=FALSE, eval = FALSE}
+ps <- construct_phyloseq(ileum_asv_tab,ileum_taxa_tab,ileum_metadata)
+rareres <- get_rarecurve(obj=ps, chunks=500)
+save(rareres,file = file.path(path,"rarefaction_ileum.Rdata"))
+```
+
+```{r, warning=FALSE,warning=FALSE}
+load(file.path(path,"rarefaction_ileum.Rdata"))
+
+prare <- ggrarecurve(obj=rareres,
+                      factorNames="Country",
+                      indexNames=c("Observe")) + 
+  theme_bw() +
+  theme(axis.text=element_text(size=8), panel.grid=element_blank(),
+        strip.background = element_rect(colour=NA,fill="grey"),
+        strip.text.x = element_text(face="bold")) + 
+  geom_vline(xintercept = seq_depth_threshold, 
+             linetype="dashed", 
+             color = "red") + 
+  xlim(0, 20000)
+
+prare
+```

@@ -1,0 +1,834 @@
+---
+title: "Mucosal microbiota alterations in primary sclerosis cholangitis persist after liver transplantation and are associated with clinical features independently of geography"
+subtitle: "Additional disease control"
+format: 
+  html:  
+    embed-resources: true
+    keep-md: false
+    toc: true
+    toc-expand: 3
+    toc-depth: 6
+    toc-location: left
+    number-sections: true
+    number-depth: 6
+    code-fold: false
+    code-tools: true
+    code-summary: "Open code"
+    grid: 
+      body-width: 1000px
+      sidebar-width: 600px
+      margin-width: 100px
+editor: source
+project:
+  type: default
+  output-dir: output
+fontsize: 12 px
+---
+
+# Introduction
+
+**PSC vs ALD**
+
+In previous analyses, we showed specific mucosal composition in PSC patients which persist after liver transplantation. Here, we added another positive control, to explore if this condition is disease specific, or it can be credited to (liver) disease in general.  
+
+Fo this purpose, we conduct the univariate analysis on Czech ALD patients after LTx. By comparing post_LTx PSC and ALD patients, we can check if the proposed PSC-associated bacteria are at least partially overlapping.
+
+If so, this would confirm our previous conclusions that these bacteria are specific for PSC.
+
+
+**Importing libraries and custom functions built for this analysis**
+
+```{r,warning=FALSE}
+source("custom_functions.R")
+```
+
+# Data Import
+
+Importing ASV, taxa and metadata tables for both Czech ALD samples
+samples.
+
+```{r,warning=FALSE}
+path = "../../data/analysis_ready_data/ikem/ALD/"
+asv_tab_ALD <- as.data.frame(fread(file.path(path,"asv_table_ALD.tsv"),
+                                    check.names = FALSE))
+taxa_tab_ALD <- as.data.frame(fread(file.path(path,"taxa_table_ALD.tsv"),
+                                     check.names = FALSE))
+metadata_ALD <- as.data.frame(fread(file.path(path,"metadata_ALD.tsv"),
+                                     check.names = FALSE))
+```
+
+Importing previous Czech dataset with PSC patients.
+
+```{r,warning=FALSE}
+path = "../../data/analysis_ready_data/ikem/"
+asv_tab_ikem <- as.data.frame(fread(file.path(path,"asv_table_ikem.csv"),
+                                    check.names = FALSE))
+taxa_tab_ikem <- as.data.frame(fread(file.path(path,"taxa_table_ikem.csv"),
+                                     check.names = FALSE))
+metadata_ikem <- as.data.frame(fread(file.path(path,"metadata_ikem.csv"),
+                                     check.names = FALSE))
+```
+
+Importing proposed PSC-associated taxa.
+
+```{r}
+psc_genus_ti <- read.xlsx("../results/Q1/univariate_analysis/supplements_psc_effect_terminal_ileum.xlsx",
+                     sheet = "terminal_ileum genus")
+
+psc_genus_colon <- read.xlsx("../results/Q1/univariate_analysis/supplements_psc_effect_colon.xlsx",
+                     sheet = "colon genus")
+```
+
+# Terminal ileum
+
+```{r}
+segment="TI"
+
+ileum_data <- merging_data(asv_tab_1=asv_tab_ALD,
+                           asv_tab_2=asv_tab_ikem,
+                           taxa_tab_1=taxa_tab_ALD,
+                           taxa_tab_2=taxa_tab_ikem,
+                           metadata_1=metadata_ALD,
+                           metadata_2=metadata_ikem,
+                           segment=segment,Q="QALD")
+
+ileum_asv_tab <- ileum_data[[1]]
+ileum_taxa_tab <- ileum_data[[2]]
+ileum_metadata <- ileum_data[[3]]
+```
+
+## Univariate Analysis
+
+Similar to previous approaches, we will use two DAA tools - linDA and Maaslin. Only the intersection of sets
+selected by each tool are shown to minimize false positives. As this analysis can only be conducted on Czech cohort, no interaction effect can be shown, therefore only Group effect is investigated. 
+
+This analysis is performed at genus level only.
+
+```{r,warning=FALSE}
+level="genus"
+
+# needed paths
+path = "../results/QALD/univariate_analysis"
+path_maaslin=file.path("../intermediate_files/maaslin/QALD",level)
+```
+
+```{r,warning=FALSE}
+# variables
+raw_linda_results_genus <- list();
+raw_linda_results_genus[[segment]] <- list()
+linda_results_genus <- list(); 
+linda_results_genus[[segment]] <- list()
+
+# country and interaction problems
+list_country_union <- list()
+list_intersections <- list()
+list_venns <- list()
+uni_statistics <- list()
+
+# workbook for final df
+wb <- createWorkbook()
+```
+
+Aggregate taxa
+
+```{r,warning=FALSE}
+genus_data <- aggregate_taxa(ileum_asv_tab,
+                             ileum_taxa_tab,
+                             taxonomic_level = level)
+
+ileum_genus_tab <- genus_data[[1]]
+ileum_genus_taxa_tab <- genus_data[[2]]
+
+ileum_genus_asv_taxa_tab <- create_asv_taxa_table(ileum_genus_tab,
+                                                  ileum_genus_taxa_tab)
+```
+
+### PSC vs ALD
+
+We can assume, that the differentially abundant taxa between these two
+groups are caused by PSC disease and other factors, like liver cirrhosis
+and overall bad clinical condition.
+
+```{r,warning=FALSE}
+group <- c("ALD post_ltx","PSC post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, echo=FALSE}
+comparison_title <- sub('"(.+?)" vs "(.+?)"', '"\\2" and "\\1"', comparison_name)
+```
+
+#### linDA
+
+```{r, warning=FALSE, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+
+# prepare the data
+linda_data <- binomial_prep(ileum_genus_tab,
+                            ileum_genus_taxa_tab,
+                            ileum_metadata,
+                            group, usage="linDA")
+
+filt_ileum_uni_data <- linda_data[[1]]
+filt_ileum_uni_taxa <- linda_data[[2]]
+filt_ileum_uni_metadata <- linda_data[[3]]
+
+# fit the model
+linda.obj <- linda(filt_ileum_uni_data, 
+                   filt_ileum_uni_metadata, 
+                   formula = '~ Group')
+
+linda.output <- linda.obj$output
+linda.output <- linda_renaming(linda.output, group)
+
+# save the results
+group1 <- paste0(group[1], " vs ","Group",group[2])
+
+for (grp in c(group1)){
+  raw_linda_results_genus[[segment]][[grp]] <- 
+    rawlinda.df(linda.output,
+                grp,
+                filt_ileum_uni_data,
+                filt_ileum_uni_taxa)
+  
+  linda_results_genus[[segment]][[grp]] <- 
+    linda.df(linda.output,
+             grp,
+             filt_ileum_uni_data,
+             filt_ileum_uni_taxa)
+}
+
+```
+
+```{r, warning=FALSE, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+# volcano plots
+volcano <- volcano_plot_linda(linda.output, 
+                                group1, 
+                                taxa_table = filt_ileum_uni_taxa) + 
+            ggtitle(comparison_title)
+
+volcano
+```
+
+#### MaAsLin2
+
+```{r, warning=FALSE, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+log_file <- file(tempfile(), open = "wt")
+sink(log_file)  # Redirect standard output
+sink(log_file, type = "message")  # Redirect messages and warnings
+
+fit_data <-  Maaslin2(
+    input_data = filt_ileum_uni_data, 
+    input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
+    min_prevalence = 0,min_variance = 0,
+    output = file.path(path_maaslin,group1), max_significance = 0.05,
+    fixed_effects = c('Group'),correction = "BH")
+
+sink()  # Restore standard output
+sink(type = "message")  # Restore messages
+```
+
+```{r,warning=FALSE}
+volcano <- volcano_plot_maaslin(fit_data,filt_ileum_uni_taxa) + 
+            ggtitle(comparison_title)
+
+
+volcano
+```
+
+#### Group - Intersection
+
+```{r,warning=FALSE}
+intersection_results <- group_intersection(group, list_intersections, list_venns,
+                                           linda.output, fit_data,
+                                           raw_linda_results_genus, 
+                                           segment = segment,
+                                           level=level)
+
+list_intersections <- intersection_results[[1]]
+list_venns <- intersection_results[[2]]
+venn <- intersection_results[[3]]
+
+# show the results
+venn
+```
+
+#### Basic statistics
+
+```{r,warning=FALSE}
+uni_df <-  merge(basic_univariate_statistics(linda_data,group),
+                 raw_linda_results_genus[[segment]][[group1]],
+                 by="SeqID",all=TRUE)
+
+uni_df[["final_sig"]] <- uni_df$SeqID %in% list_intersections[[paste(segment,level,comparison_name)]][["SeqID"]]
+uni_statistics[[segment]][[paste(level,comparison_name)]] <- uni_df
+
+# for comparison
+new_name <- comparison_name
+addWorksheet(wb, sheetName = new_name)
+writeData(wb, sheet = new_name, uni_df, rowNames=FALSE)
+```
+
+#### Comparison with PSC-associated taxa
+
+```{r}
+psc_ald_sig_ti <- uni_df %>%
+  dplyr::filter(final_sig==TRUE) %>%
+  dplyr::select(SeqID,Taxonomy,log2FoldChange)
+
+psc_genus_ti <- psc_genus_ti
+```
+
+```{r}
+list_core <- list()
+list_core[["PSC vs ALD"]] <- psc_ald_sig_ti$Taxonomy
+list_core[["PSC-associated taxa"]] <- psc_genus_ti$Taxonomy
+  
+# venn diagram
+venn <- ggvenn(list_core, fill_color = c("blue", "red")) + 
+    ggtitle("Intersection between PSC-associated taxa and (PSC vs ALD)") + 
+    guides(fill = "none")
+
+venn
+```
+```{r}
+intersection_df <- intersect(list_core$`PSC vs ALD`,list_core$`PSC-associated taxa`)
+
+intersection_df
+```
+
+
+### ALD vs HC
+
+We can assume, that the differentially abundant taxa between these two
+groups are caused by PSC disease and other factors, like liver cirrhosis
+and overall bad clinical condition.
+
+```{r,warning=FALSE}
+group <- c("HC","ALD post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, echo=FALSE}
+comparison_title <- sub('"(.+?)" vs "(.+?)"', '"\\2" and "\\1"', comparison_name)
+```
+
+#### linDA
+
+```{r, warning=FALSE, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+
+# prepare the data
+linda_data <- binomial_prep(ileum_genus_tab,
+                            ileum_genus_taxa_tab,
+                            ileum_metadata,
+                            group, usage="linDA")
+
+filt_ileum_uni_data <- linda_data[[1]]
+filt_ileum_uni_taxa <- linda_data[[2]]
+filt_ileum_uni_metadata <- linda_data[[3]]
+
+# fit the model
+linda.obj <- linda(filt_ileum_uni_data, 
+                   filt_ileum_uni_metadata, 
+                   formula = '~ Group')
+
+linda.output <- linda.obj$output
+linda.output <- linda_renaming(linda.output, group)
+
+# save the results
+group1 <- paste0(group[1], " vs ","Group",group[2])
+
+for (grp in c(group1)){
+  raw_linda_results_genus[[segment]][[grp]] <- 
+    rawlinda.df(linda.output,
+                grp,
+                filt_ileum_uni_data,
+                filt_ileum_uni_taxa)
+  
+  linda_results_genus[[segment]][[grp]] <- 
+    linda.df(linda.output,
+             grp,
+             filt_ileum_uni_data,
+             filt_ileum_uni_taxa)
+}
+
+```
+
+```{r, warning=FALSE, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+# volcano plots
+volcano <- volcano_plot_linda(linda.output, 
+                                group1, 
+                                taxa_table = filt_ileum_uni_taxa) + 
+            ggtitle(comparison_title)
+
+volcano
+```
+
+#### MaAsLin2
+
+```{r, warning=FALSE, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+log_file <- file(tempfile(), open = "wt")
+sink(log_file)  # Redirect standard output
+sink(log_file, type = "message")  # Redirect messages and warnings
+
+fit_data <-  Maaslin2(
+    input_data = filt_ileum_uni_data, 
+    input_metadata = filt_ileum_uni_metadata, min_abundance = 0,
+    min_prevalence = 0,min_variance = 0,
+    output = file.path(path_maaslin,group1), max_significance = 0.05,
+    fixed_effects = c('Group'),correction = "BH")
+
+sink()  # Restore standard output
+sink(type = "message")  # Restore messages
+```
+
+```{r,warning=FALSE}
+volcano <- volcano_plot_maaslin(fit_data,filt_ileum_uni_taxa) + 
+            ggtitle(comparison_title)
+
+
+volcano
+```
+
+#### Group - Intersection
+
+```{r,warning=FALSE}
+intersection_results <- group_intersection(group, list_intersections, list_venns,
+                                           linda.output, fit_data,
+                                           raw_linda_results_genus, 
+                                           segment = segment,
+                                           level=level)
+
+list_intersections <- intersection_results[[1]]
+list_venns <- intersection_results[[2]]
+venn <- intersection_results[[3]]
+
+# show the results
+venn
+```
+
+#### Basic statistics
+
+```{r,warning=FALSE}
+uni_df <-  merge(basic_univariate_statistics(linda_data,group),
+                 raw_linda_results_genus[[segment]][[group1]],
+                 by="SeqID",all=TRUE)
+
+uni_df[["final_sig"]] <- uni_df$SeqID %in% list_intersections[[paste(segment,level,comparison_name)]][["SeqID"]]
+uni_statistics[[segment]][[paste(level,comparison_name)]] <- uni_df
+
+# for comparison
+new_name <- comparison_name
+addWorksheet(wb, sheetName = new_name)
+writeData(wb, sheet = new_name, uni_df, rowNames=FALSE)
+```
+
+#### Comparison with PSC-associated taxa
+
+```{r}
+hc_ald_sig_ti <- uni_df %>%
+  dplyr::filter(final_sig==TRUE) %>%
+  dplyr::select(SeqID,Taxonomy,log2FoldChange)
+
+psc_genus_ti <- psc_genus_ti
+```
+
+```{r}
+list_core <- list()
+list_core[["ALD vs HC"]] <- hc_ald_sig_ti$Taxonomy
+list_core[["PSC-associated taxa"]] <- psc_genus_ti$Taxonomy
+  
+# venn diagram
+venn <- ggvenn(list_core, fill_color = c("blue", "red")) + 
+    ggtitle("Intersection between PSC-associated taxa and (ALD vs HC)") + 
+    guides(fill = "none")
+
+venn
+```
+
+From this Venn diagram, we are interested in EXLUSIVE RIGH JOIN
+
+```{r}
+A <- list_core$`ALD vs HC`
+B <- list_core$`PSC-associated taxa`
+remaining_psc <- B[!(B %in% A)]
+
+psc_genus_ti %>%
+  dplyr::filter(Taxonomy %in% remaining_psc)
+
+uni_df %>%
+  dplyr::filter(Taxonomy %in% remaining_psc)
+```
+
+# Colon
+
+```{r}
+segment="colon"
+
+colon_data <- merging_data(asv_tab_1=asv_tab_ALD,
+                           asv_tab_2=asv_tab_ikem,
+                           taxa_tab_1=taxa_tab_ALD,
+                           taxa_tab_2=taxa_tab_ikem,
+                           metadata_1=metadata_ALD,
+                           metadata_2=metadata_ikem,
+                           segment=segment,Q="QALD")
+
+colon_asv_tab <- colon_data[[1]]
+colon_taxa_tab <- colon_data[[2]]
+colon_metadata <- colon_data[[3]]
+```
+
+## Univariate Analysis
+
+
+```{r,warning=FALSE}
+level="genus"
+```
+
+```{r,warning=FALSE}
+# needed paths
+path = "../results/QALD/univariate_analysis"
+path_maaslin=file.path("../intermediate_files/maaslin/QALD",level)
+
+# variables
+raw_linda_results_genus[[segment]] <- list()
+linda_results_genus[[segment]] <- list()
+
+# country and interaction problems
+list_country_union <- list()
+list_venns <- list()
+
+# workbook for final df
+wb <- createWorkbook()
+
+```
+
+```{r,warning=FALSE}
+level="genus"
+```
+
+Aggregate taxa
+
+```{r,warning=FALSE}
+genus_data <- aggregate_taxa(colon_asv_tab,
+                             colon_taxa_tab,
+                             taxonomic_level = level)
+
+colon_genus_tab <- genus_data[[1]]
+colon_genus_taxa_tab <- genus_data[[2]]
+
+colon_genus_asv_taxa_tab <- create_asv_taxa_table(colon_genus_tab,
+                                                  colon_genus_taxa_tab)
+```
+
+##### PSC vs ALD
+
+###### linDA
+
+```{r,warning=FALSE}
+group <- c("ALD post_ltx","PSC post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, echo=FALSE}
+comparison_title <- sub('"(.+?)" vs "(.+?)"', '"\\2" and "\\1"', comparison_name)
+```
+
+```{r, warning=FALSE, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+
+# prepare the data
+linda_data <- binomial_prep(colon_genus_tab,
+                            colon_genus_taxa_tab,
+                            colon_metadata,
+                            group, usage="linDA")
+
+filt_colon_uni_data <- linda_data[[1]]
+filt_colon_uni_taxa <- linda_data[[2]]
+filt_colon_uni_metadata <- linda_data[[3]]
+
+# fit the model
+linda.obj <- linda(filt_colon_uni_data,
+                   filt_colon_uni_metadata,
+                   formula = '~ Group + (1|Patient)')
+
+linda.output <- linda.obj$output
+linda.output <- linda_renaming(linda.output, group)
+
+# save the results
+group1 <- paste0(group[1], " vs ","Group",group[2])
+
+for (grp in c(group1)){
+  raw_linda_results_genus[[segment]][[grp]] <- 
+    rawlinda.df(linda.output,
+                grp,
+                filt_colon_uni_data,
+                filt_colon_uni_taxa)
+  
+  linda_results_genus[[segment]][[grp]] <- 
+    linda.df(linda.output,
+             grp,
+             filt_colon_uni_data,
+             filt_colon_uni_taxa)
+}
+```
+
+```{r, warning=FALSE, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+# volcano plot
+volcano <- volcano_plot_linda(linda.output, group1, 
+                                taxa_table = filt_colon_uni_taxa) + 
+            ggtitle(paste(group,collapse=" vs "))
+
+
+# see the plot
+volcano
+```
+
+###### MaAsLin2
+
+```{r, warning=FALSE, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+
+log_file <- file(tempfile(), open = "wt")
+sink(log_file)  # Redirect standard output
+sink(log_file, type = "message")  # Redirect messages and warnings
+
+fit_data = Maaslin2(
+    input_data = filt_colon_uni_data, 
+    input_metadata = filt_colon_uni_metadata, min_abundance = 0,
+    min_prevalence = 0,min_variance = 0,
+    output = file.path(path_maaslin,group1), max_significance = 0.05,
+    fixed_effects = c('Group'),random_effects = "Patient",
+    correction = "BH")
+
+sink()  # Restore standard output
+sink(type = "message")  # Restore messages
+```
+
+```{r,warning=FALSE}
+volcano <- volcano_plot_maaslin(fit_data,filt_colon_uni_taxa) + 
+            ggtitle(paste(group[1], "vs", group[2]))
+
+volcano
+```
+
+###### Group - Intersection
+
+```{r,warning=FALSE}
+intersection_results <- group_intersection(group, list_intersections, list_venns,
+                                           linda.output, fit_data,
+                                           raw_linda_results_genus, 
+                                           segment = segment,
+                                           level=level)
+
+list_intersections <- intersection_results[[1]]
+list_venns <- intersection_results[[2]]
+venn <- intersection_results[[3]]
+
+# show the results
+venn
+```
+
+
+###### Basic statistics
+
+```{r,warning=FALSE}
+uni_df <-  merge(basic_univariate_statistics(linda_data,group),
+                 raw_linda_results_genus[[segment]][[group1]],
+                 by="SeqID",all=TRUE)
+
+uni_df[["final_sig"]] <- uni_df$SeqID %in% list_intersections[[paste(segment,level,comparison_name)]][["SeqID"]]
+uni_statistics[[segment]][[paste(level,comparison_name)]] <- uni_df
+
+# for comparison
+new_name <- comparison_name
+addWorksheet(wb, sheetName = new_name)
+writeData(wb, sheet = new_name, uni_df, rowNames=FALSE)
+```
+
+###### Comparison with PSC-associated taxa
+
+```{r}
+psc_ald_sig_colon <- uni_df %>%
+  dplyr::filter(final_sig==TRUE) %>%
+  dplyr::select(SeqID,Taxonomy,log2FoldChange)
+
+psc_genus_colon <- psc_genus_colon
+```
+
+```{r}
+list_core <- list()
+list_core[["PSC vs ALD"]] <- psc_ald_sig_colon$Taxonomy
+list_core[["PSC-associated taxa"]] <- psc_genus_colon$Taxonomy
+
+# venn diagram
+venn <- ggvenn(list_core, fill_color = c("blue", "red")) + 
+    ggtitle("Intersection between PSC-associated taxa and (PSC vs ALD)") + 
+    guides(fill = "none")
+
+venn
+```
+
+```{r}
+intersection_df <- intersect(list_core$`PSC vs ALD`,list_core$`PSC-associated taxa`)
+
+intersection_df
+```
+
+##### ALD vs HC
+
+###### linDA
+
+```{r,warning=FALSE}
+group <- c("HC","ALD post_ltx")
+comparison_name <- paste0(group[1], " vs ",group[2])
+```
+
+```{r, echo=FALSE}
+comparison_title <- sub('"(.+?)" vs "(.+?)"', '"\\2" and "\\1"', comparison_name)
+```
+
+```{r, warning=FALSE, fig.width=15, fig.height=5, fig.fullwidth=TRUE}
+
+# prepare the data
+linda_data <- binomial_prep(colon_genus_tab,
+                            colon_genus_taxa_tab,
+                            colon_metadata,
+                            group, usage="linDA")
+
+filt_colon_uni_data <- linda_data[[1]]
+filt_colon_uni_taxa <- linda_data[[2]]
+filt_colon_uni_metadata <- linda_data[[3]]
+
+# fit the model
+linda.obj <- linda(filt_colon_uni_data,
+                   filt_colon_uni_metadata,
+                   formula = '~ Group + (1|Patient)')
+
+linda.output <- linda.obj$output
+linda.output <- linda_renaming(linda.output, group)
+
+# save the results
+group1 <- paste0(group[1], " vs ","Group",group[2])
+
+for (grp in c(group1)){
+  raw_linda_results_genus[[segment]][[grp]] <- 
+    rawlinda.df(linda.output,
+                grp,
+                filt_colon_uni_data,
+                filt_colon_uni_taxa)
+  
+  linda_results_genus[[segment]][[grp]] <- 
+    linda.df(linda.output,
+             grp,
+             filt_colon_uni_data,
+             filt_colon_uni_taxa)
+}
+```
+
+```{r, warning=FALSE, fig.width=5, fig.height=4, fig.fullwidth=TRUE}
+# volcano plot
+volcano <- volcano_plot_linda(linda.output, group1, 
+                                taxa_table = filt_colon_uni_taxa) + 
+            ggtitle(paste(group,collapse=" vs "))
+
+
+# see the plot
+volcano
+```
+
+###### MaAsLin2
+
+```{r, warning=FALSE, echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+
+log_file <- file(tempfile(), open = "wt")
+sink(log_file)  # Redirect standard output
+sink(log_file, type = "message")  # Redirect messages and warnings
+
+fit_data = Maaslin2(
+    input_data = filt_colon_uni_data, 
+    input_metadata = filt_colon_uni_metadata, min_abundance = 0,
+    min_prevalence = 0,min_variance = 0,
+    output = file.path(path_maaslin,group1), max_significance = 0.05,
+    fixed_effects = c('Group'),random_effects = "Patient",
+    correction = "BH")
+
+sink()  # Restore standard output
+sink(type = "message")  # Restore messages
+```
+
+```{r,warning=FALSE}
+volcano <- volcano_plot_maaslin(fit_data,filt_colon_uni_taxa) + 
+            ggtitle(paste(group[1], "vs", group[2]))
+
+volcano
+```
+
+###### Group - Intersection
+
+```{r,warning=FALSE}
+intersection_results <- group_intersection(group, list_intersections, list_venns,
+                                           linda.output, fit_data,
+                                           raw_linda_results_genus, 
+                                           segment = segment,
+                                           level=level)
+
+list_intersections <- intersection_results[[1]]
+list_venns <- intersection_results[[2]]
+venn <- intersection_results[[3]]
+
+# show the results
+venn
+```
+
+
+###### Basic statistics
+
+```{r,warning=FALSE}
+uni_df <-  merge(basic_univariate_statistics(linda_data,group),
+                 raw_linda_results_genus[[segment]][[group1]],
+                 by="SeqID",all=TRUE)
+
+uni_df[["final_sig"]] <- uni_df$SeqID %in% list_intersections[[paste(segment,level,comparison_name)]][["SeqID"]]
+uni_statistics[[segment]][[paste(level,comparison_name)]] <- uni_df
+
+# for comparison
+new_name <- comparison_name
+addWorksheet(wb, sheetName = new_name)
+writeData(wb, sheet = new_name, uni_df, rowNames=FALSE)
+```
+
+###### Comparison with PSC-associated taxa
+
+```{r}
+hc_ald_sig_colon <- uni_df %>%
+  dplyr::filter(final_sig==TRUE) %>%
+  dplyr::select(SeqID,Taxonomy,log2FoldChange)
+
+psc_genus_colon <- psc_genus_colon
+```
+
+```{r}
+list_core <- list()
+list_core[["ALD vs HC"]] <- hc_ald_sig_colon$Taxonomy
+list_core[["PSC-associated taxa"]] <- psc_genus_colon$Taxonomy
+
+# venn diagram
+venn <- ggvenn(list_core, fill_color = c("blue", "red")) + 
+    ggtitle("Intersection between PSC-associated taxa and (ALD vs HC)") + 
+    guides(fill = "none")
+
+venn
+```
+
+From this Venn diagram, we are interested in EXLUSIVE RIGH JOIN
+
+```{r}
+A <- list_core$`ALD vs HC`
+B <- list_core$`PSC-associated taxa`
+remaining_psc <- B[!(B %in% A)]
+
+psc_genus_colon %>%
+  dplyr::filter(Taxonomy %in% remaining_psc)
+
+uni_df %>%
+  dplyr::filter(Taxonomy %in% remaining_psc)
+```
+
