@@ -1,0 +1,3 @@
+"","alpha","lambda","auc","auc_czech","auc_no","auc_optimism_corrected","auc_optimism_corrected_CIL","auc_optimism_corrected_CIU","accuracy","accuracy_czech","accuracy_no","accuracy_optimism_corrected","accuracy_optimism_corrected_CIL","accuracy_optimism_corrected_CIU"
+"low vs high ASV colon",1,0.00235299514654762,1,1,1,0.576388400391887,0.418467650276192,0.690289785126742,1,NA,1,0.640802201756409,0.528153409090909,0.73331308411215
+"low vs high genus colon",0.2,0.0177085389615795,1,1,1,0.618874549385647,0.503140911822552,0.739865491848442,0.996587030716723,NA,0.995594713656388,0.662457354131987,0.558211143695015,0.728989058582175
